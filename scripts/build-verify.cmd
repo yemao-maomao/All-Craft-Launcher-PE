@@ -16,4 +16,4 @@ set "GRADLE_USER_HOME=C:\Users\vshuf\Documents\ai\gradle-home"
 set "TMP=C:\Users\vshuf\Documents\ai\tmp"
 set "TEMP=C:\Users\vshuf\Documents\ai\tmp"
 cd /d "%~dp0.."
-call gradlew.bat :core-common:testDebugUnitTest :app:assembleDebug --console=plain
+call gradlew.bat testDebugUnitTest :app:assembleDebug --console=plain

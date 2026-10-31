@@ -3,11 +3,13 @@ package org.aclpe.aclpe
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.aclpe.aclpe.core.AbiGuard
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.core.ThemeMode
+import org.aclpe.aclpe.ui.home.HomeViewModel
 import org.aclpe.aclpe.ui.nav.AppNavHost
 import org.aclpe.aclpe.ui.theme.AclPeTheme
 
@@ -15,6 +17,7 @@ import org.aclpe.aclpe.ui.theme.AclPeTheme
 class MainActivity : ComponentActivity() {
 
     private val appSettings: AppSettings by lazy { AppSettings(applicationContext) }
+    private val homeViewModel: HomeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +32,7 @@ class MainActivity : ComponentActivity() {
             val themeMode: ThemeMode by appSettings.themeMode
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
             AclPeTheme(themeMode) {
-                AppNavHost(appSettings = appSettings)
+                AppNavHost(appSettings = appSettings, homeViewModel = homeViewModel)
             }
         }
     }

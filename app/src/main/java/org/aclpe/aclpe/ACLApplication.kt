@@ -9,16 +9,20 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.core.CrashCatcher
+import org.aclpe.aclpe.core.env.EnvDependencies
 import org.aclpe.core.common.log.FileLoggingTree
 import org.aclpe.core.common.log.LogRedactor
 import timber.log.Timber
 import java.io.File
 
-/** 应用入口：日志初始化（文件双写 + 脱敏）、崩溃捕获（默认关）。 */
+/** 应用入口：日志初始化（文件双写 + 脱敏）、崩溃捕获（默认关）、core-env 依赖装配。 */
 class ACLApplication : Application() {
 
     // 应用级作用域：只承载与 App 同生命周期的后台任务；UI 逻辑一律使用 ViewModel 作用域（禁 GlobalScope）。
     private val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** core-env 依赖（骨架期手工装配；模块增多后再考虑统一 DI）。 */
+    val envDependencies: EnvDependencies by lazy { EnvDependencies(this) }
 
     override fun onCreate() {
         super.onCreate()

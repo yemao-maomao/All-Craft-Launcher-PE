@@ -1,8 +1,9 @@
-﻿import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -27,4 +28,14 @@ kotlin {
 
 dependencies {
     implementation(project(":core-common"))
+
+    implementation(libs.kotlinx.coroutines.android)
+    // api 暴露 Room：EnvDatabase（RoomDatabase 子类）出现在模块公共 API（EnvStore 装配），
+    // 消费方（app）编译期需要访问其超类
+    api(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

@@ -10,9 +10,22 @@
 
     <!-- 首页 -->
     <string name="home_env_card_title">运行环境</string>
-    <string name="home_env_placeholder">环境卡片占位 —— Step 0（core-env）接入后，此处展示 Java 17 / Java 21 / natives / assets 的探测状态与下载进度。</string>
     <string name="home_launch_disabled">启动游戏（环境未就绪）</string>
+    <string name="home_launch_ready">启动游戏</string>
     <string name="home_launch_gate_hint">未完成环境补齐前不可启动，门禁由 core-env 的 LaunchGate 提供。</string>
+
+    <!-- 环境卡片状态 -->
+    <string name="env_status_ready">✓ 就绪</string>
+    <string name="env_status_missing">未安装</string>
+    <string name="env_status_corrupted">损坏</string>
+    <string name="env_status_busy">处理中…</string>
+    <string name="env_status_paused">已暂停</string>
+    <string name="env_status_failed">失败</string>
+    <string name="env_probing">检测中…</string>
+    <string name="env_action_download">下载</string>
+    <string name="env_refresh">重新检测</string>
+    <string name="env_step2_pending">下载能力将在 Step 2（core-download）接入</string>
+    <string name="env_placeholder_rows">natives / assets 索引：未安装版本，无依赖（Step 2 接入后显示）</string>
 
     <!-- 版本页 -->
     <string name="versions_placeholder">版本列表 —— Step 2（core-download）接入后显示 version_manifest_v2 数据与下载安装。</string>

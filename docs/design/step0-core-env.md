@@ -261,4 +261,50 @@ stateDiagram-v2
 | Q4 | 下载调度 | 默认仅 Wi-Fi、可手动切任意网络；前台服务通知为硬需求 |
 | Q5 | 项目标识 | 项目名 ACL-PE；包名 `org.aclpe.aclpe`；仓库 https://github.com/yemao-maomao/All-Craft-Launcher-PE |
 
-**新待决策**：执行顺序调整——Step 0 代码需 Gradle 骨架（Step 1）支撑、EnvBootstrap 复用 Step 2 的下载模块，建议 1→0→2（见评审回复）。
+**新待决策**：执行顺序调整——Step 0 代码需 Gradle 骨架（Step 1）支撑、EnvBootstrap 复用 Step 2 的下载模块，建议 1→0→2（见评审回复）。**已确认并执行完毕。**
+
+---
+
+## 11. 实现记录（2026-11-01，已交付）
+
+### 11.1 设计 → 代码映射
+
+| 设计条目 | 实现 |
+|---|---|
+| §2.1 JRE 静态+动态探测 | `EnvProbe.probeJre`：静态四文件检查 + `java -version`（15s 超时）经 `ProcessExecutor` 注入执行 |
+| §2.2/2.3 natives / assets 探测 | `probeNatives`（标记+抽查 .so）/ `probeAssetsIndex`（SHA-1 流式比对） |
+| §2.4 EnvState 合成 | `EnvProbeReport.state`（CORRUPTED > PARTIAL > MISSING > READY）+ `issues` 明细 |
+| §3.1 状态机 | `EnvStateMachine`（纯函数：probe 绝对覆盖 / 重试 1-3 退避、第 3 次降级、第 4 次 FAILED_PERMANENT、手动重试清零）+ 全转移矩阵测试 |
+| §4 映射表 | `JreVersionMapping`（json 优先 → 区间表 → 默认 8） |
+| §5.1 下载契约 | `DownloadScheduler` 接口（Step 2 实现，硬性要求写入 KDoc）；`EnvBootstrap` 只依赖该接口 |
+| §5.2 安装 | 本步不实现（属 Step 2 调度器职责），状态机已预留 VERIFYING/INSTALLING |
+| §5.3 幂等清理 | `TmpCleaner`（.staging 全删 / .part 在途保留）+ `EnvBootstrap.cleanupTmp` |
+| §5.4 恢复 | 状态全落 Room（`EnvItemEntity`/`EnvStore`）；`reconcile` 幂等且跳过在途任务（不打断续传） |
+| §6 UI 卡片 | `HomeViewModel` + `HomeScreen` 环境卡片（探测/状态/按钮/门禁置灰），`Step2PendingDownloadScheduler` 诚实占位 |
+
+### 11.2 与设计的偏差（均有理由）
+
+1. **快照版本映射细化**：数字前缀可解析的快照按版本族映射（`21w14a` → 21），真正无法解析（`rd-132211`）才默认 8 —— 比「一律 8」更正确。
+2. **ProbePartial 按 MISSING 处理**：安装是原子的（staging→rename），无增量价值，重新下载即可。
+3. **位宽 UNKNOWN 判 Not64Bit**：宁可重下，不可误启动（设计文档 §2.1 已声明该取舍）。
+4. **reconcile 跳过在途状态**（QUEUED/DOWNLOADING/PAUSED/VERIFYING/INSTALLING）：保证幂等且不打断断点续传。
+5. **下载规格由调用方注入**（`Map<String, EnvDownloadSpec>`）：url/sha256 属 core-download 的清单职责（Step 2）；无规格时组件置 MISSING + `errorCode=no_download_spec`，UI 诚实提示。
+6. **Room 2.8.5 无 File 重载** → 数据库路径用绝对路径字符串落 `files/launcher.db`；KSP 2.3.12（独立版本线，与 Kotlin 2.4.10 组合经 fork 实证）。
+
+### 11.3 验证结果
+
+- **单测：71/71 全绿**（0 failures / 0 errors）：core-common 16（既有）+ core-env 55（解析器矩阵 11、探测器矩阵 16、状态机 8、映射 7、tmp 清理 5、Bootstrap 5、门禁 4）。
+- **构建**：`testDebugUnitTest` + `:app:assembleDebug` BUILD SUCCESSFUL（零警告）；APK 31.4MB（含 Room/KSP 产物），SHA256 `AC2088F7ADDB89D6820DF17CA129E2256007C1567B9FDA57EEB090A295509404`。
+- **手工步骤（真机）**：
+  1. 安装 `dist/app-debug.apk` → 首页卡片显示「Java 17：未安装」「Java 21：未安装」+ 总状态「未安装」；启动按钮置灰；点「下载」出现「下载能力将在 Step 2 接入」。
+  2. `adb shell run-as org.aclpe.aclpe` 创建 `files/env/jre/17/arm64/{bin/java,lib/arm64/server/libjvm.so,lib/arm64/libjli.so,release}`（java 用能 echo `openjdk version "17.0.5"` 与 `64-Bit Server VM` 的 shell 脚本）→ 点「重新检测」→ 卡片该行变「✓ 就绪」（若 exec 失败会显示「损坏」，即为 CORRUPTED 路径验证）。
+  3. 杀进程重启 App → 卡片状态不变（Room 持久化恢复）。
+  4. `files/logs/launcher.log` 存在且无 token 明文。
+
+### 11.4 已知问题
+
+1. `RealProcessExecutor` 尚未在真机验证（真机 exec JRE 属 Step 2 下载完成后；手工步骤 2 覆盖此路径）。
+2. `.part` 文件名 `':'→'_'` 转换：组件键含 `_` 时回转换引入 `':'`；当前键集（`jre:17`、hex hash、hex indexId）均无 `_`，实际无影响（TmpCleaner 注释已注明取舍）。
+3. 骨架期探测范围固定 JRE 17/21；natives/assets 的 EnvScope 注入由 Step 2 在版本安装后提供。
+4. `Step2PendingDownloadScheduler` 为诚实占位（非假实现），Step 2 替换。
+5. Room `exportSchema=false`（骨架期）；CI/迁移管理阶段再启用 schema 导出。

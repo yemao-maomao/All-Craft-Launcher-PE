@@ -24,7 +24,7 @@ if errorlevel 8 goto :fail
 
 echo [2/3] building in mirror (unit tests + debug APK)...
 cd /d "%MIRROR%"
-call gradlew.bat :core-common:testDebugUnitTest :app:assembleDebug --console=plain
+call gradlew.bat testDebugUnitTest :app:assembleDebug --console=plain
 if errorlevel 1 goto :fail
 
 echo [3/3] copying APK back...

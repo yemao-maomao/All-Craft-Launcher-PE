@@ -21,10 +21,12 @@ datastore = "1.3.0"
 
 # --- 后续模块预声明（当前未接入，接入时在此更新）---
 kotlinxSerializationJson = "1.10.0"  # Step 2 起解析 version json / manifest 用
-room = "2.8.5"                       # Step 0/2 起 Room 持久化用（届时配 KSP）
+room = "2.8.5"                       # Step 0/2 起 Room 持久化用（配 KSP 2.3.x）
+ksp = "2.3.12"                       # KSP 2.x 独立版本线，与 Kotlin 2.4.10 + Room 2.8.5 组合在本机 fork 实证可构建
 
 [libraries]
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 junit = { module = "junit:junit", version.ref = "junit" }
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
@@ -35,6 +37,7 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -43,3 +46,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

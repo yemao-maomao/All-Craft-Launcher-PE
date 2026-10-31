@@ -74,6 +74,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core-common"))
+    implementation(project(":core-env"))
 
     // Compose Multiplatform（当前仅 Android 目标；模块边界见 docs/design/step1-skeleton.md）
     implementation(compose.runtime)
