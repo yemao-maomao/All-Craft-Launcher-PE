@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 本机配置（不提交）
+local.properties
+*.keystore
+*.jks
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 输出
+out/
+dist/
+*.log
+acl-recovery/

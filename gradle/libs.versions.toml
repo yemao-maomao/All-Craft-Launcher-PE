@@ -1,0 +1,45 @@
+[versions]
+# --- Android / Gradle / Kotlin ---
+agp = "8.13.2"                     # 与 Gradle 8.14.4 组合在本机验证过（ACL-PE fork 同款）；支持 compileSdk 36
+kotlin = "2.4.10"                  # 产物元数据需 R8 9.1.29+（见根 build.gradle.kts 的 classpath 覆盖）
+composeMultiplatform = "1.9.0"     # 约束：CMP 1.10+ 的 androidx compose 委托要求 compileSdk 37/AGP 9.1，本机 AGP 8.13 上限 36，故钉在 1.9.0
+compileSdk = "36"
+minSdk = "29"
+targetSdk = "35"
+
+# --- 基础库 ---
+coroutines = "1.9.0"
+timber = "5.0.1"
+junit = "4.13.2"
+
+# --- androidx ---
+# 约束：nav 2.10+ / lifecycle 2.11+ 要求 compileSdk 37/AGP 9.1（本机 AGP 8.13 上限 36），钉在其下最新稳定版
+navigationCompose = "2.9.8"
+activityCompose = "1.13.0"
+lifecycle = "2.10.0"
+datastore = "1.3.0"
+
+# --- 后续模块预声明（当前未接入，接入时在此更新）---
+kotlinxSerializationJson = "1.10.0"  # Step 2 起解析 version json / manifest 用
+room = "2.8.5"                       # Step 0/2 起 Room 持久化用（届时配 KSP）
+
+[libraries]
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+junit = { module = "junit:junit", version.ref = "junit" }
+navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ACL-PE</string>
+
+    <!-- 底部导航 -->
+    <string name="tab_home">首页</string>
+    <string name="tab_versions">版本</string>
+    <string name="tab_settings">设置</string>
+    <string name="tab_about">关于</string>
+
+    <!-- 首页 -->
+    <string name="home_env_card_title">运行环境</string>
+    <string name="home_env_placeholder">环境卡片占位 —— Step 0（core-env）接入后，此处展示 Java 17 / Java 21 / natives / assets 的探测状态与下载进度。</string>
+    <string name="home_launch_disabled">启动游戏（环境未就绪）</string>
+    <string name="home_launch_gate_hint">未完成环境补齐前不可启动，门禁由 core-env 的 LaunchGate 提供。</string>
+
+    <!-- 版本页 -->
+    <string name="versions_placeholder">版本列表 —— Step 2（core-download）接入后显示 version_manifest_v2 数据与下载安装。</string>
+
+    <!-- 设置页 -->
+    <string name="settings_section_launcher">启动器</string>
+    <string name="settings_theme_mode">主题模式</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_crash_capture">崩溃日志捕获（默认关闭）</string>
+    <string name="settings_crash_capture_desc">开启后崩溃时写 files/logs/crash-*.txt，用于问题反馈；默认关闭以保护性能与隐私。</string>
+
+    <!-- 关于页 -->
+    <string name="about_repo">仓库：https://github.com/yemao-maomao/All-Craft-Launcher-PE</string>
+    <string name="about_third_party_title">第三方组件（LICENSE/NOTICE）</string>
+    <string name="about_third_party_hint">占位 —— 复用的第三方组件（OpenJDK JRE、GLFW stub、图形翻译层等）将随组件实际接入在此逐项列出许可证与源码链接（硬性约束）。</string>
+
+    <!-- ABI 守卫 -->
+    <string name="abi_unsupported_title">设备不受支持</string>
+    <string name="abi_unsupported_message">ACL-PE 仅支持 64 位（arm64-v8a）设备。当前设备为 32 位，无法运行 Minecraft Java 版。</string>
+    <string name="exit">退出</string>
+</resources>

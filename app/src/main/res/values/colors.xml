@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用图标背景色：由 scripts/gen_icon.py 从源图四角采样生成（mode=contain，2026-11-01） -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

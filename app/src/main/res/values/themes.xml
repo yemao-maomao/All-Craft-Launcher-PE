@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 自绘全部 UI；平台主题仅用于窗口背景与启动过渡，避免引入 MDC 依赖 -->
+    <style name="Theme.ACLPE" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
