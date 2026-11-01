@@ -75,6 +75,28 @@ class EnvProbeTest {
     }
 
     @Test
+    fun `atLeast 语义_槽位 21 接受更高版本`() {
+        // 方案 B：Java 21+ 槽位实际安装 JRE25 → 探测接受 major ≥ 21
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        makeJre(layout, 21)
+        val output25: String = """openjdk version "25.0.1" 2025-10-21
+OpenJDK 64-Bit Server VM (build 25.0.1+12, mixed mode, sharing)
+"""
+        val probe: EnvProbe = EnvProbe(FakeProcessExecutor(okExec(output25)))
+        val ok: JreProbeResult = probe.probeJre(layout, 21, atLeast = true)
+        assertTrue("atLeast 应接受 25: $ok", ok is JreProbeResult.Ok)
+        // 低于槽位仍拒绝
+        val low: JreProbeResult = probe.probeJre(layout, 21, atLeast = true).let {
+            val probeLow: EnvProbe = EnvProbe(FakeProcessExecutor(okExec(OUTPUT_JRE17_SERVER)))
+            probeLow.probeJre(layout, 21, atLeast = true)
+        }
+        assertEquals(JreProbeResult.WrongVersion(expected = 21, actual = 17), low)
+        // 非 atLeast 槽位要求精确
+        val exact: JreProbeResult = probe.probeJre(layout, 21, atLeast = false)
+        assertEquals(JreProbeResult.WrongVersion(expected = 21, actual = 25), exact)
+    }
+
+    @Test
     fun `32 位输出返回 Not64Bit`() {
         val layout: EnvLayout = EnvLayout(tempRoot())
         makeJre(layout, 17)

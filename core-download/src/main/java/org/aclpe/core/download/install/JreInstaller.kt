@@ -123,10 +123,10 @@ object JreInstaller {
         }
         backup.deleteRecursively()
 
-        // 就绪标记（.build）：与 DB 双写互证；内容见设计文档 §1
+        // 就绪标记（.build）：与 DB 双写互证；内容见设计文档 §1。sha256 规范为小写。
         val marker: File = layout.jreBuildMarker(javaMajor)
         try {
-            marker.writeText("buildId=$buildId\nsha256=$sha256\njavaVersion=$javaMajor\n")
+            marker.writeText("buildId=$buildId\nsha256=${sha256.lowercase()}\njavaVersion=$javaMajor\n")
         } catch (t: Throwable) {
             return AppResult.Err(AppError.Io("marker_failed", cause = t))
         }

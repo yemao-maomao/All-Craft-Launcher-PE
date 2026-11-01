@@ -84,9 +84,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             probing.value = true
-            // 幂等：tmp 清理 + reconcile（重复调用安全，在途任务不被打断）
+            // 幂等：tmp 清理 + reconcile（重复调用安全，在途任务不被打断）；
+            // jre:21 槽位为 atLeast 语义（实际安装社区 JRE25，方案 B）
             deps.bootstrap.cleanupTmp()
-            deps.bootstrap.reconcile(EnvScope(jreMajors = setOf(17, 21)), specs)
+            deps.bootstrap.reconcile(
+                EnvScope(jreMajors = setOf(17, 21), jreAtLeastMajors = JreManifest.atLeastMajors),
+                specs,
+            )
             probing.value = false
         }
     }

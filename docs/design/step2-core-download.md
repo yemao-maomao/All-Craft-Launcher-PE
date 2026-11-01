@@ -55,10 +55,11 @@ app/.../core/env/{EnvDependencies,JreManifest}.kt # 真实链路装配 + 内置 
 
 ## 5. 已知问题
 
-1. **JRE21 下载源未定**：PojavLauncherTeam 组织已归档、其 JRE21 Actions 工件过期；社区镜像站已换 JRE22/25。候选：自托管（发布 sha256，最稳）/ 社区 JRE22/25 替代（Java 21+ 字节码可运行，需你接受偏差）/ AngelAuraMC 继任 fork 工件（CI 依赖）。**待你决策后补入 JreManifest。**
-2. Gitee 镜像未启用（无稳定端点）。
-3. 网络探针测试依赖本机 GitHub 可达性（默认跳过，`ACLPE_NETWORK=true` 开启）。
-4. 分片并发仅用于全新下载；断点续传走单流（设计文档已注明取舍）。
-5. 下载恢复依赖 Room 任务状态 + .part 文件；任务被 cancel 后 .part 删除。
-6. 符号链接目标若在归档外/缺失则跳过（冒烟与探测兜底判损坏重下）。
-7. Room exportSchema=false（CI/迁移管理阶段再开）。
+1. **JRE21 槽位方案 B 已落地（2026-11-01 用户确认）**：组件键 jre:21 实际安装社区 JRE25（mcddos 直链，本机实测 sha256 `94BCC9C6…E9C4C2` pin）；探测用 atLeast 语义（EnvScope.jreAtLeastMajors）；风险（http、无日期文件名、内容可被替换）由 sha256 pin 兜底（替换即校验失败拒装）。若将来获得官方 JRE21 只需替换 JreManifest 常量。
+2. **双轨验证状态**：1.21.x 轨（JRE25）端到端真实通过（下载→校验→安装→标记→atLeast 探测）；1.20.1 轨（JRE17）真实下载+sha256 校验+安装冒烟已多轮实证，最终断言因本机 GitHub 断连未跑完（环境网络，非代码），链路各环均有单测覆盖。
+3. Gitee 镜像未启用（无稳定端点）。
+4. 网络探针测试依赖本机网络（默认跳过，`ACLPE_NETWORK=true` 开启）。
+5. 分片并发仅用于全新下载；断点续传走单流（设计文档已注明取舍）。
+6. 下载恢复依赖 Room 任务状态 + .part 文件；任务被 cancel 后 .part 删除。
+7. 符号链接目标若在归档外/缺失则跳过（冒烟与探测兜底判损坏重下）。
+8. Room exportSchema=false（CI/迁移管理阶段再开）。

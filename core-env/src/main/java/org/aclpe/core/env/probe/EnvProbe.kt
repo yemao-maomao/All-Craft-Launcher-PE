@@ -22,6 +22,11 @@ data class EnvScope(
     val jreMajors: Set<Int> = emptySet(),
     val nativesHashes: Set<String> = emptySet(),
     val assetsIndexes: Set<AssetsIndexRef> = emptySet(),
+    /**
+     * 「至少」语义的 JRE 槽位（方案 B：Java 21+ 轨实际安装 JRE25，探测接受 major ≥ 槽位值）。
+     * 槽位语义：组件键仍为 jre:21（运行 Java 21 字节码所需的最低版本），安装目录 env/jre/21/arm64。
+     */
+    val jreAtLeastMajors: Set<Int> = emptySet(),
 )
 
 data class AssetsIndexRef(
@@ -86,14 +91,19 @@ data class EnvProbeReport(
 class EnvProbe(private val executor: ProcessExecutor) {
 
     fun probe(scope: EnvScope, layout: EnvLayout): EnvProbeReport = EnvProbeReport(
-        jres = scope.jreMajors.associateWith { probeJre(layout, it) },
+        jres = scope.jreMajors.associateWith { javaMajor ->
+            probeJre(layout, javaMajor, atLeast = javaMajor in scope.jreAtLeastMajors)
+        },
         natives = scope.nativesHashes.associateWith { probeNatives(layout, it) },
         assetsIndexes = scope.assetsIndexes.associate { ref ->
             ref.indexId to probeAssetsIndex(layout, ref.profileId, ref.versionId, ref.indexId, ref.sha1)
         },
     )
 
-    fun probeJre(layout: EnvLayout, javaMajor: Int): JreProbeResult {
+    /**
+     * [atLeast]：接受 major ≥ javaMajor（Java 21+ 槽位装 JRE25 的场景）；默认要求精确匹配。
+     */
+    fun probeJre(layout: EnvLayout, javaMajor: Int, atLeast: Boolean = false): JreProbeResult {
         val dir: File = layout.jreDir(javaMajor)
         val javaBin: File = layout.jreJavaBinary(javaMajor)
         val required: List<File> = listOf(javaBin, layout.jreReleaseFile(javaMajor))
@@ -123,7 +133,8 @@ class EnvProbe(private val executor: ProcessExecutor) {
         val info: JreVersionInfo = JreVersionParser.parse(result.output)
             ?: return JreProbeResult.ExecFailed("parse", "无法解析版本输出: " + result.output.take(200))
         return when {
-            info.major != javaMajor -> JreProbeResult.WrongVersion(javaMajor, info.major)
+            info.major != javaMajor && !(atLeast && info.major > javaMajor) ->
+                JreProbeResult.WrongVersion(javaMajor, info.major)
             info.bits == JreVersionInfo.Bits.BITS_32 -> JreProbeResult.Not64Bit
             // 设计决策：位宽不明确即视为风险（宁可重下，不可误启动）
             info.bits == JreVersionInfo.Bits.UNKNOWN -> JreProbeResult.Not64Bit
