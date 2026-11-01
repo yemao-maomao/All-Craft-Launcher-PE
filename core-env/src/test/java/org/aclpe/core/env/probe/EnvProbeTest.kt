@@ -19,7 +19,7 @@ class EnvProbeTest {
     private fun makeJre(layout: EnvLayout, major: Int, withServer: Boolean = true): File {
         val dir: File = layout.jreDir(major)
         File(dir, "bin").mkdirs()
-        File(dir, "lib/arm64/server").mkdirs()
+        File(dir, "lib/server").mkdirs()
         layout.jreJavaBinary(major).writeText("#!/bin/sh\necho fake")
         layout.jreJliLib(major).writeText("fake")
         if (withServer) layout.jreServerLib(major).writeText("fake")

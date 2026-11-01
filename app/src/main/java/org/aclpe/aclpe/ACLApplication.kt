@@ -21,8 +21,10 @@ class ACLApplication : Application() {
     // 应用级作用域：只承载与 App 同生命周期的后台任务；UI 逻辑一律使用 ViewModel 作用域（禁 GlobalScope）。
     private val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** core-env 依赖（骨架期手工装配；模块增多后再考虑统一 DI）。 */
-    val envDependencies: EnvDependencies by lazy { EnvDependencies(this) }
+    /** core-env/core-download 依赖（Step 2 起为真实下载链路）。 */
+    val envDependencies: EnvDependencies by lazy {
+        EnvDependencies(this, applicationScope, AppSettings(this))
+    }
 
     override fun onCreate() {
         super.onCreate()

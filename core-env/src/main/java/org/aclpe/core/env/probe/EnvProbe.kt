@@ -96,13 +96,13 @@ class EnvProbe(private val executor: ProcessExecutor) {
     fun probeJre(layout: EnvLayout, javaMajor: Int): JreProbeResult {
         val dir: File = layout.jreDir(javaMajor)
         val javaBin: File = layout.jreJavaBinary(javaMajor)
-        val required: List<File> = listOf(
-            javaBin,
-            layout.jreServerLib(javaMajor),
-            layout.jreJliLib(javaMajor),
-            layout.jreReleaseFile(javaMajor),
-        )
-        val missingNames: List<String> = required.filterNot { it.isFile && it.length() > 0L }.map { it.name }
+        val required: List<File> = listOf(javaBin, layout.jreReleaseFile(javaMajor))
+        // libjvm/libjli 用候选（Pojav 经典布局 + 架构子目录变体）
+        val serverLibs: List<File> = layout.jreServerLibCandidates(javaMajor)
+        val jliLibs: List<File> = layout.jreJliLibCandidates(javaMajor)
+        val missingNames: List<String> = required.filterNot { it.isFile && it.length() > 0L }.map { it.name } +
+            (if (serverLibs.none { it.isFile && it.length() > 0L }) listOf("libjvm.so") else emptyList()) +
+            (if (jliLibs.none { it.isFile && it.length() > 0L }) listOf("libjli.so") else emptyList())
 
         if (!javaBin.exists()) {
             return if (dir.exists()) JreProbeResult.Partial(missingNames) else JreProbeResult.Missing
@@ -112,7 +112,7 @@ class EnvProbe(private val executor: ProcessExecutor) {
         val result: ExecResult = executor.execute(
             command = listOf(javaBin.absolutePath, "-version"),
             env = mapOf(
-                "LD_LIBRARY_PATH" to (File(dir, "lib/arm64").absolutePath + ":" + File(dir, "lib").absolutePath),
+                "LD_LIBRARY_PATH" to layout.jreLibPathCandidates(javaMajor),
                 "HOME" to dir.absolutePath,
                 "TMPDIR" to dir.absolutePath,
             ),

@@ -15,6 +15,7 @@ private val Context.appSettingsDataStore by preferencesDataStore(name = "app_set
 object AppSettingsKeys {
     val CRASH_CAPTURE_ENABLED: Preferences.Key<Boolean> = booleanPreferencesKey("crash_capture_enabled")
     val THEME_MODE: Preferences.Key<String> = stringPreferencesKey("theme_mode")
+    val DOWNLOAD_WIFI_ONLY: Preferences.Key<Boolean> = booleanPreferencesKey("download_wifi_only")
 }
 
 enum class ThemeMode {
@@ -34,11 +35,19 @@ class AppSettings(private val context: Context) {
     val themeMode: Flow<ThemeMode> =
         context.appSettingsDataStore.data.map { ThemeMode.from(it[AppSettingsKeys.THEME_MODE]) }
 
+    /** 仅 Wi-Fi 下载开关（用户决策 Q4：默认仅 Wi-Fi，可手动切任意网络）。 */
+    val downloadWifiOnly: Flow<Boolean> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.DOWNLOAD_WIFI_ONLY] ?: true }
+
     suspend fun setCrashCaptureEnabled(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.CRASH_CAPTURE_ENABLED] = value }
     }
 
     suspend fun setThemeMode(value: ThemeMode) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.THEME_MODE] = value.name }
+    }
+
+    suspend fun setDownloadWifiOnly(value: Boolean) {
+        context.appSettingsDataStore.edit { it[AppSettingsKeys.DOWNLOAD_WIFI_ONLY] = value }
     }
 }

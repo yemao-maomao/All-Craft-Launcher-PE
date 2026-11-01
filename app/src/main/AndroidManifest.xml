@@ -4,6 +4,8 @@
 
     <!-- 常驻：环境下载/校验/启动均需网络 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 仅 Wi-Fi 下载策略需要判断当前网络类型 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 仅「导入/导出」功能按需引导用户授予（全盘文件访问）；默认绝不申请 -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"

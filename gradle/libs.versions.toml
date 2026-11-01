@@ -11,6 +11,10 @@ targetSdk = "35"
 coroutines = "1.9.0"
 timber = "5.0.1"
 junit = "4.13.2"
+okhttp = "4.12.0"                  # 下载传输层（分片/Range/重试）
+commonsCompress = "1.26.0"         # tar 解压（fork 实证版本）
+xz = "1.9"                         # xz 解码（fork 实证版本）
+commonsCodec = "1.17.0"            # commons-compress 运行时依赖
 
 # --- androidx ---
 # 约束：nav 2.10+ / lifecycle 2.11+ 要求 compileSdk 37/AGP 9.1（本机 AGP 8.13 上限 36），钉在其下最新稳定版
@@ -35,6 +39,11 @@ lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-com
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
+xz = { module = "org.tukaani:xz", version.ref = "xz" }
+commons-codec = { module = "commons-codec:commons-codec", version.ref = "commonsCodec" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }

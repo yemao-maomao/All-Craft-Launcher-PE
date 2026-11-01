@@ -15,4 +15,18 @@ object OsSpec {
     const val ARCH: String = "arm64"
     const val ABI: String = "aarch64"
     const val SEPARATOR: Char = ':'
+
+    /**
+     * os.version：Android 无等价概念。version json 里的 os.version 条件（多为 macOS 版本正则）
+     * 按空串处理 → 正则不匹配（安全）。rules 引擎（core-download）必须经 [PlatformContext.fromOsSpec]
+     * 取用本常量，禁止自行硬编码。
+     */
+    const val OS_VERSION: String = ""
+
+    /**
+     * features：启动器能力声明（如 has_custom_resolution / is_demo_user）。
+     * 骨架期为空集：规则中 features 条件一律不匹配 → 不引入对应启动参数（安全默认）；
+     * 后续实现对应能力时在此声明，rules 引擎与启动参数拼装（Step 3）自动同步。
+     */
+    val FEATURES: Set<String> = emptySet()
 }

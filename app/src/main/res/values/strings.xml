@@ -19,13 +19,18 @@
     <string name="env_status_missing">未安装</string>
     <string name="env_status_corrupted">损坏</string>
     <string name="env_status_busy">处理中…</string>
+    <string name="env_status_downloading">下载中…</string>
     <string name="env_status_paused">已暂停</string>
     <string name="env_status_failed">失败</string>
+    <string name="env_status_spec_pending">下载源待配置</string>
     <string name="env_probing">检测中…</string>
     <string name="env_action_download">下载</string>
+    <string name="env_action_pause">暂停</string>
+    <string name="env_action_resume">继续</string>
     <string name="env_refresh">重新检测</string>
     <string name="env_step2_pending">下载能力将在 Step 2（core-download）接入</string>
-    <string name="env_placeholder_rows">natives / assets 索引：未安装版本，无依赖（Step 2 接入后显示）</string>
+    <string name="env_no_spec_hint">该组件下载源待配置（JRE21 源决策中）</string>
+    <string name="env_placeholder_rows">natives / assets 索引：未安装版本，无依赖（版本安装后显示）</string>
 
     <!-- 版本页 -->
     <string name="versions_placeholder">版本列表 —— Step 2（core-download）接入后显示 version_manifest_v2 数据与下载安装。</string>

@@ -22,9 +22,30 @@ class EnvLayout(private val filesRoot: File) {
 
     fun jreJavaBinary(javaMajor: Int): File = File(jreDir(javaMajor), "bin/java")
 
-    fun jreServerLib(javaMajor: Int): File = File(jreDir(javaMajor), "lib/arm64/server/libjvm.so")
+    /** Pojav 构建实际布局：lib/server/libjvm.so（无架构子目录）。 */
+    fun jreServerLib(javaMajor: Int): File = File(jreDir(javaMajor), "lib/server/libjvm.so")
 
-    fun jreJliLib(javaMajor: Int): File = File(jreDir(javaMajor), "lib/arm64/libjli.so")
+    fun jreJliLib(javaMajor: Int): File = File(jreDir(javaMajor), "lib/libjli.so")
+
+    /** 兼容候选：部分构建带架构子目录（aarch64 / arm64）。 */
+    fun jreServerLibCandidates(javaMajor: Int): List<File> = listOf(
+        jreServerLib(javaMajor),
+        File(jreDir(javaMajor), "lib/aarch64/server/libjvm.so"),
+        File(jreDir(javaMajor), "lib/arm64/server/libjvm.so"),
+    )
+
+    fun jreJliLibCandidates(javaMajor: Int): List<File> = listOf(
+        jreJliLib(javaMajor),
+        File(jreDir(javaMajor), "lib/aarch64/libjli.so"),
+        File(jreDir(javaMajor), "lib/arm64/libjli.so"),
+    )
+
+    /** LD_LIBRARY_PATH 候选目录（动态探测与 Step 3 启动共用）。 */
+    fun jreLibPathCandidates(javaMajor: Int): String {
+        val dir: File = jreDir(javaMajor)
+        return listOf("lib", "lib/server", "lib/aarch64", "lib/aarch64/server", "lib/arm64", "lib/arm64/server")
+            .joinToString(":") { File(dir, it).absolutePath }
+    }
 
     fun jreReleaseFile(javaMajor: Int): File = File(jreDir(javaMajor), "release")
 

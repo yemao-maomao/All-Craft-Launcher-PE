@@ -75,6 +75,7 @@ kotlin {
 dependencies {
     implementation(project(":core-common"))
     implementation(project(":core-env"))
+    implementation(project(":core-download"))
 
     // Compose Multiplatform（当前仅 Android 目标；模块边界见 docs/design/step1-skeleton.md）
     implementation(compose.runtime)
@@ -88,6 +89,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.datastore.preferences)
+    implementation(libs.okhttp)   // EnvDependencies 显式构造 OkHttpClient
 
     testImplementation(libs.junit)
 }

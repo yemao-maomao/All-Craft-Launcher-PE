@@ -75,7 +75,7 @@ class EnvBootstrapTest {
         val (layout, store, scheduler) = setup()
         val dir: File = layout.jreDir(17)
         File(dir, "bin").mkdirs()
-        File(dir, "lib/arm64/server").mkdirs()
+        File(dir, "lib/server").mkdirs()
         layout.jreJavaBinary(17).writeText("x")
         layout.jreJliLib(17).writeText("x")
         layout.jreServerLib(17).writeText("x")
