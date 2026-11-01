@@ -26,3 +26,4 @@ acl-recovery/
 
 # 内置 JRE 资产（92MB，不入库；用 scripts/fetch-jre-assets.cmd 拉取）
 app/src/main/assets/runtimes/*.xz
+local.properties
