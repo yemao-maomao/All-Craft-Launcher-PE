@@ -31,12 +31,16 @@ private fun renameWithRetry(from: File, to: File, attempts: Int = 3): Boolean {
  */
 object TarXzExtractor {
 
+    /** 解压 IO 缓冲：8KB 默认在手机上解 55MB xz 太慢（实测瓶颈），64KB 显著提速。 */
+    private const val IO_BUFFER: Int = 64 * 1024
+
     fun extract(tarXz: File, destDir: File): AppResult<Unit> = try {
         val root: File = destDir.apply { mkdirs() }
-        XZInputStream(BufferedInputStream(FileInputStream(tarXz))).use { xz ->
-            TarArchiveInputStream(xz).use { tar ->
+        XZInputStream(BufferedInputStream(FileInputStream(tarXz), IO_BUFFER)).use { xz ->
+            TarArchiveInputStream(xz, IO_BUFFER).use { tar ->
                 var stripPrefix: String? = null
                 val symlinks: MutableList<Pair<String, String>> = mutableListOf()
+                val buffer: ByteArray = ByteArray(IO_BUFFER)
                 while (true) {
                     val entry: TarArchiveEntry = tar.nextEntry ?: break
                     val name: String = entry.name
@@ -57,7 +61,13 @@ object TarXzExtractor {
                         entry.isFile -> {
                             val target: File = File(root, relative)
                             target.parentFile?.mkdirs()
-                            target.outputStream().use { out -> tar.copyTo(out) }
+                            target.outputStream().buffered(IO_BUFFER).use { out ->
+                                while (true) {
+                                    val n: Int = tar.read(buffer)
+                                    if (n < 0) break
+                                    out.write(buffer, 0, n)
+                                }
+                            }
                         }
                         else -> Unit   // 其余条目类型跳过
                     }

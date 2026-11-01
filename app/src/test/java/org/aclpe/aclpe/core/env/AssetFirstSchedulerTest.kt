@@ -1,8 +1,11 @@
 package org.aclpe.aclpe.core.env
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.aclpe.core.env.bootstrap.DownloadScheduler
 import org.aclpe.core.env.bootstrap.DownloadTaskState
@@ -17,26 +20,22 @@ import java.io.File
 class AssetFirstSchedulerTest {
 
     private class FakeDelegate : DownloadScheduler {
-        val enqueued: MutableList<EnvDownloadTask> = mutableListOf()
-        var paused: MutableList<String> = mutableListOf()
-        var cancelled: MutableList<String> = mutableListOf()
+        val enqueuedFlow: MutableStateFlow<List<EnvDownloadTask>> = MutableStateFlow(emptyList())
+        val pausedFlow: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
 
-        override val states: Flow<List<EnvDownloadState>> =
-            kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+        override val states: Flow<List<EnvDownloadState>> = MutableStateFlow(emptyList())
 
         override fun enqueue(task: EnvDownloadTask) {
-            enqueued += task
+            enqueuedFlow.value = enqueuedFlow.value + task
         }
 
         override fun pause(component: String) {
-            paused += component
+            pausedFlow.value = pausedFlow.value + component
         }
 
         override fun resume(component: String) = Unit
 
-        override fun cancel(component: String) {
-            cancelled += component
-        }
+        override fun cancel(component: String) = Unit
     }
 
     private val task: EnvDownloadTask = EnvDownloadTask(
@@ -56,13 +55,15 @@ class AssetFirstSchedulerTest {
             scope = backgroundScope,
             assetSource = { component -> if (component == "jre:17") asset else null },
             installer = { component, file -> installed += component to file },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
 
         scheduler.enqueue(task)
-        // 等待资产任务完成（状态流出现 SUCCEEDED）
-        val states: List<EnvDownloadState> = scheduler.states.first { list -> list.any { it.component == "jre:17" && it.state == DownloadTaskState.SUCCEEDED } }
+        val states: List<EnvDownloadState> = scheduler.states.first { list ->
+            list.any { it.component == "jre:17" && it.state == DownloadTaskState.SUCCEEDED }
+        }
         assertTrue(states.any { it.component == "jre:17" && it.state == DownloadTaskState.SUCCEEDED })
-        assertEquals(0, delegate.enqueued.size)
+        assertEquals(0, delegate.enqueuedFlow.value.size)
         assertEquals(1, installed.size)
         assertEquals("jre:17", installed[0].first)
     }
@@ -75,10 +76,11 @@ class AssetFirstSchedulerTest {
             scope = backgroundScope,
             assetSource = { null },
             installer = { _, _ -> },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
         scheduler.enqueue(task)
-        assertEquals(1, delegate.enqueued.size)
-        assertEquals(task, delegate.enqueued[0])
+        delegate.enqueuedFlow.first { it.size == 1 }
+        assertEquals(task, delegate.enqueuedFlow.value[0])
     }
 
     @Test
@@ -90,6 +92,7 @@ class AssetFirstSchedulerTest {
             scope = backgroundScope,
             assetSource = { asset },
             installer = { _, _ -> throw IllegalStateException("boom") },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
         scheduler.enqueue(task)
         val states: List<EnvDownloadState> = scheduler.states.first { list ->
@@ -102,20 +105,31 @@ class AssetFirstSchedulerTest {
     fun `pause_cancel 分流_资产任务取消本地_无资产转网络`() = runTest {
         val delegate: FakeDelegate = FakeDelegate()
         val asset: File = File(System.getProperty("java.io.tmpdir"), "asset-c-${System.nanoTime()}").apply { writeText("x") }
-        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
         val scheduler = AssetFirstScheduler(
             delegate = delegate,
             scope = backgroundScope,
             assetSource = { component -> if (component == "jre:17") asset else null },
             installer = { _, _ -> gate.await() },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
         scheduler.enqueue(task)
-        scheduler.pause("jre:17")   // 资产任务仍在运行：不落 delegate
-        scheduler.cancel("jre:17")  // 取消本地任务
+        // 等资产任务进入 RUNNING（已判定本地、挂起在 gate）
+        scheduler.states.first { list ->
+            list.any { it.component == "jre:17" && it.state == DownloadTaskState.RUNNING }
+        }
+        scheduler.pause("jre:17")       // 资产任务：不落 delegate
+        assertEquals(0, delegate.pausedFlow.value.size)
+        scheduler.cancel("jre:17")      // 取消本地任务（CancellationException 不置 FAILED）
         gate.complete(Unit)
+        scheduler.states.first { list -> list.none { it.component == "jre:17" } }
+
         scheduler.enqueue(task.copy(component = "jre:21"))
-        scheduler.pause("jre:21")   // 网络任务转 delegate
-        assertEquals(listOf("jre:21"), delegate.paused)
+        delegate.enqueuedFlow.first { it.size == 1 }
+        assertEquals("jre:21", delegate.enqueuedFlow.value[0].component)
+        scheduler.pause("jre:21")       // 网络任务转 delegate
+        delegate.pausedFlow.first { it.isNotEmpty() }
+        assertEquals(listOf("jre:21"), delegate.pausedFlow.value)
     }
 
     @Test
@@ -127,6 +141,7 @@ class AssetFirstSchedulerTest {
             scope = backgroundScope,
             assetSource = { asset },
             installer = { _, _ -> },
+            ioDispatcher = StandardTestDispatcher(testScheduler),
         )
         val final = scheduler.states.map { list -> list.firstOrNull { it.component == "jre:17" } }
         scheduler.enqueue(task)

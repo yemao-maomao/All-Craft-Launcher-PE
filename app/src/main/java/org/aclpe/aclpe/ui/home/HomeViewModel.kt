@@ -95,6 +95,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refresh()
+        // 自动补齐路径的完成观察：reconcile 自动入队的任务没有 download() 的等待者，
+        // 任何任务到达终态（成功/失败/取消）后重新探测刷新环境条目状态（幂等）。
+        viewModelScope.launch {
+            val handled: MutableSet<String> = mutableSetOf()
+            scheduler.states.collect { states ->
+                states.forEach { state ->
+                    val key: String = "${state.component}:${state.state}"
+                    if (state.state in TERMINAL_TASK_STATES && handled.add(key)) {
+                        refresh()
+                    }
+                }
+            }
+        }
     }
 
     fun refresh() {
@@ -121,6 +134,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             refresh()
         }
+    }
+
+    companion object {
+        private val TERMINAL_TASK_STATES: Set<DownloadTaskState> = setOf(
+            DownloadTaskState.SUCCEEDED,
+            DownloadTaskState.FAILED,
+            DownloadTaskState.CANCELLED,
+        )
     }
 
     fun pause(component: String) = scheduler.pause(component)
