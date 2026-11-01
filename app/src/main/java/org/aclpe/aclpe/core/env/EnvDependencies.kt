@@ -7,6 +7,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import org.aclpe.aclpe.core.AppSettings
+import org.aclpe.core.account.AccountRepository
+import org.aclpe.core.account.skin.SkinCache
+import org.aclpe.core.account.store.AccountStore
+import org.aclpe.core.account.store.EncryptedTokenStore
+import org.aclpe.core.account.store.FileAccountStore
 import org.aclpe.core.download.install.JreInstaller
 import org.aclpe.core.download.net.DownloadManager
 import org.aclpe.core.download.sched.DownloadSchedulerImpl
@@ -18,6 +23,10 @@ import org.aclpe.core.env.probe.RealProcessExecutor
 import org.aclpe.core.env.store.EnvStore
 import org.aclpe.core.env.store.LauncherDatabase
 import org.aclpe.core.env.store.RoomEnvStore
+import org.aclpe.core.env.store.VersionDao
+import org.aclpe.core.launch.process.GameProcessStarter
+import org.aclpe.core.launch.process.LaunchPlanBuilder
+import org.aclpe.core.launch.process.RealGameProcessStarter
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -53,6 +62,26 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     )
 
     val bootstrap: EnvBootstrap = EnvBootstrap(probe, scheduler, store, layout)
+
+    // ---- Step 4：账号契约装配（离线账户 + 加密 token 存储 + 皮肤缓存） ----
+    val accountRepository: AccountRepository = AccountRepository(
+        store = FileAccountStore.create(context.filesDir) as AccountStore,
+        tokenStore = EncryptedTokenStore(context.filesDir),
+    )
+
+    val skinCache: SkinCache = SkinCache(managerClient(), File(context.filesDir, "cache/skins"))
+
+    val versionDao: VersionDao = LauncherDatabase.get(context).versionDao()
+
+    // ---- Step 3：启动链路装配 ----
+    val launchPlanBuilder: LaunchPlanBuilder = LaunchPlanBuilder(layout)
+
+    val gameProcessStarter: GameProcessStarter = RealGameProcessStarter()
+
+    private fun managerClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     /** 网络策略：仅 Wi-Fi 开关（AppSettings，默认开）→ 当前网络是否 Wi-Fi/以太网。 */
     private fun wifiPolicy(context: Context, appSettings: AppSettings): suspend () -> Boolean = {

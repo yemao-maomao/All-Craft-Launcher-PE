@@ -3,6 +3,7 @@ package org.aclpe.aclpe.ui.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +14,16 @@ import kotlinx.coroutines.launch
 import org.aclpe.aclpe.ACLApplication
 import org.aclpe.aclpe.core.env.EnvDependencies
 import org.aclpe.aclpe.core.env.JreManifest
+import org.aclpe.aclpe.ui.account.AccountViewModel
+import org.aclpe.core.account.model.Account
+import org.aclpe.core.account.model.AccountType
+import org.aclpe.core.account.model.AuthSession
+import org.aclpe.core.account.model.AuthTokens
+import org.aclpe.core.download.json.VersionJson
+import org.aclpe.core.download.json.VersionJsonParser
+import org.aclpe.core.download.mirror.MirrorId
+import org.aclpe.core.download.resolve.LibraryResolver
+import org.aclpe.core.download.rules.PlatformContext
 import org.aclpe.core.env.bootstrap.DownloadScheduler
 import org.aclpe.core.env.bootstrap.DownloadTaskState
 import org.aclpe.core.env.bootstrap.EnvDownloadSpec
@@ -21,6 +32,11 @@ import org.aclpe.core.env.bootstrap.EnvDownloadTask
 import org.aclpe.core.env.fsm.EnvItemState
 import org.aclpe.core.env.probe.EnvScope
 import org.aclpe.core.env.store.EnvItemEntity
+import org.aclpe.core.env.store.VersionEntity
+import org.aclpe.core.launch.model.LaunchAuth
+import org.aclpe.core.launch.model.LaunchContext
+import org.aclpe.core.launch.model.MemoryTier
+import java.io.File
 
 /** 环境卡片 UI 条目：组件状态 + 下载任务状态/进度。 */
 data class EnvUiItem(
@@ -110,4 +126,81 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun pause(component: String) = scheduler.pause(component)
 
     fun resume(component: String) = scheduler.resume(component)
+
+    // ---- Step 4：启动按钮接线（真实链路：门禁 → 账号 → 版本 → 拼装 → 拉起） ----
+
+    private val _launchMessage = MutableStateFlow<String?>(null)
+    val launchMessage: StateFlow<String?> = _launchMessage
+
+    fun consumeLaunchMessage() {
+        _launchMessage.value = null
+    }
+
+    /**
+     * 启动游戏。每步失败给出诚实提示；版本安装流水线（Step 2 遗留）未接线前，
+     * 实际会停在第 3 步提示（版本未安装）——链路结构已完整，接入安装后即通。
+     */
+    fun launch() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. 环境门禁（LaunchGate 语义）
+            if (!uiState.value.overallReady) {
+                _launchMessage.value = "环境未就绪，无法启动游戏"
+                return@launch
+            }
+            // 2. 账号（离线会话 token 为空）
+            val account: Account = deps.accountRepository.activeAccount(AccountViewModel.PROFILE_ID).getOrNull()
+                ?: run {
+                    _launchMessage.value = "请先在「设置 → 账号」创建账号"
+                    return@launch
+                }
+            // 3. 已安装版本检查（诚实提示：版本安装流水线后续接入）
+            val installed: VersionEntity? = deps.versionDao.observeAll().first().firstOrNull { it.installed }
+            if (installed == null) {
+                _launchMessage.value = "尚未安装游戏版本（版本安装流水线后续接入）"
+                return@launch
+            }
+            // 4. 版本元数据 + 库解析 + 拼装 + 拉起
+            val profileDir: File = File(deps.layout.root, "runtimes/${AccountViewModel.PROFILE_ID}")
+            val versionJsonFile: File = File(profileDir, "versions/${installed.id}/${installed.id}.json")
+            val versionJson: VersionJson = versionJsonFile.takeIf { it.isFile }
+                ?.readText()
+                ?.let { VersionJsonParser.parseVersionJson(it).getOrNull() }
+                ?: run {
+                    _launchMessage.value = "版本元数据缺失，请重新安装"
+                    return@launch
+                }
+            val session: AuthSession = deps.accountRepository.activeSession(AccountViewModel.PROFILE_ID).getOrNull()
+                ?: AuthSession(account, AuthTokens(accessToken = ""))
+
+            val context: LaunchContext = LaunchContext(
+                version = versionJson,
+                auth = LaunchAuth(
+                    name = account.username,
+                    uuid = account.uuid,
+                    accessToken = session.tokens.accessToken,
+                    userType = if (account.type == AccountType.LOCAL_OFFLINE) "legacy" else "msa",
+                ),
+                gameDir = profileDir,
+                assetsDir = File(profileDir, "assets"),
+                assetsIndexId = versionJson.assetIndex?.id ?: "",
+                nativesDir = File(profileDir, "natives"),
+                libraries = LibraryResolver.resolve(versionJson.libraries, PlatformContext.fromOsSpec(), MirrorId.OFFICIAL),
+                clientJar = File(profileDir, "versions/${installed.id}/${installed.id}.jar"),
+                javaMajor = installed.javaMajor ?: 17,
+                memoryTier = MemoryTier.MEDIUM,
+                deviceMemoryMb = 2048,
+            )
+            val plan = deps.launchPlanBuilder.build(context)
+            if (plan.isErr) {
+                _launchMessage.value = "启动计划生成失败：${plan.errorOrNull()?.code}"
+                return@launch
+            }
+            val start = deps.gameProcessStarter.start(
+                plan.getOrNull()!!,
+                stdoutLog = File(profileDir, "logs/game-stdout.log"),
+                stderrLog = File(profileDir, "logs/game-stderr.log"),
+            )
+            _launchMessage.value = if (start.isOk) "游戏进程已启动" else "启动失败：${start.errorOrNull()?.code}"
+        }
+    }
 }

@@ -43,6 +43,21 @@
     <string name="settings_theme_dark">深色</string>
     <string name="settings_crash_capture">崩溃日志捕获（默认关闭）</string>
     <string name="settings_crash_capture_desc">开启后崩溃时写 files/logs/crash-*.txt，用于问题反馈；默认关闭以保护性能与隐私。</string>
+    <string name="settings_wifi_only">仅 Wi-Fi 下载（默认开）</string>
+    <string name="settings_wifi_only_desc">关闭后蜂窝网络也可下载；建议保持开启以保护流量。</string>
+
+    <!-- 账号区（Step 4） -->
+    <string name="settings_section_account">账号</string>
+    <string name="account_none">未登录账号</string>
+    <string name="account_type_offline">本地离线</string>
+    <string name="account_type_microsoft">微软</string>
+    <string name="account_offline_limitations">离线账户限制：无皮肤同步、无法联机、可能违反 Minecraft EULA。仅供单机体验，不推荐作为默认选择。</string>
+    <string name="account_create_offline">创建离线账户</string>
+    <string name="account_ms_login">微软登录</string>
+    <string name="account_ms_reserved">微软登录（OAuth2 + PKCE 官方流）已预留契约与方案，本期未实现，见 docs/design/step4-ms-oauth-plan.md。</string>
+    <string name="account_name_hint">游戏昵称</string>
+    <string name="account_create_confirm">创建</string>
+    <string name="account_cancel">取消</string>
 
     <!-- 关于页 -->
     <string name="about_repo">仓库：https://github.com/yemao-maomao/All-Craft-Launcher-PE</string>

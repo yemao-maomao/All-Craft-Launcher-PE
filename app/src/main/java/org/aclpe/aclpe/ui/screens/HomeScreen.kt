@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +39,15 @@ import org.aclpe.core.env.fsm.EnvItemState
 @Composable
 fun HomeScreen(viewModel: HomeViewModel) {
     val uiState: EnvUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val launchMessage: String? by viewModel.launchMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    LaunchedEffect(launchMessage) {
+        launchMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeLaunchMessage()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -98,7 +107,7 @@ fun HomeScreen(viewModel: HomeViewModel) {
         }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = { /* Step 3（core-launch）接入后由 LaunchGate 放行触发 */ },
+            onClick = { viewModel.launch() },
             enabled = uiState.overallReady,
             modifier = Modifier
                 .fillMaxWidth()

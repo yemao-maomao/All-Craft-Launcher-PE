@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import org.aclpe.aclpe.core.AppSettings
+import org.aclpe.aclpe.ui.account.AccountViewModel
 import org.aclpe.aclpe.ui.home.HomeViewModel
 import org.aclpe.aclpe.ui.screens.AboutScreen
 import org.aclpe.aclpe.ui.screens.HomeScreen
@@ -24,7 +25,11 @@ import org.aclpe.aclpe.ui.screens.VersionsScreen
 
 /** 导航宿主：底部导航 + 页面切换（单 Activity 壳）。 */
 @Composable
-fun AppNavHost(appSettings: AppSettings, homeViewModel: HomeViewModel) {
+fun AppNavHost(
+    appSettings: AppSettings,
+    homeViewModel: HomeViewModel,
+    accountViewModel: AccountViewModel,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute: String? = backStackEntry?.destination?.route
@@ -56,7 +61,7 @@ fun AppNavHost(appSettings: AppSettings, homeViewModel: HomeViewModel) {
         ) {
             composable(Destination.Home.route) { HomeScreen(homeViewModel) }
             composable(Destination.Versions.route) { VersionsScreen() }
-            composable(Destination.Settings.route) { SettingsScreen(appSettings) }
+            composable(Destination.Settings.route) { SettingsScreen(appSettings, accountViewModel) }
             composable(Destination.About.route) { AboutScreen() }
         }
     }
