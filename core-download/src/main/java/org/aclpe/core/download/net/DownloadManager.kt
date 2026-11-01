@@ -102,9 +102,13 @@ class DownloadManager(
     private suspend fun transfer(request: DownloadRequest, url: String, partFile: File): AppResult<Unit> {
         val existing: Long = if (partFile.isFile) partFile.length() else 0L
 
-        // 服务端总大小与续传起点
-        val probe: Pair<Long, Boolean> = probeSize(url, existing)  // (total, resumed)
-            ?: return AppResult.Err(AppError.Network("head_failed", "无法确定资源大小"))
+        // 服务端总大小与续传起点（IO 异常收敛为 Err：沿调用链上抛会击穿调度器协程——审计高危#2）
+        val probe: Pair<Long, Boolean> = try {
+            probeSize(url, existing)  // (total, resumed)
+        } catch (t: Throwable) {
+            coroutineContext.ensureActive()
+            return AppResult.Err(AppError.Network("probe_failed", cause = t))
+        } ?: return AppResult.Err(AppError.Network("head_failed", "无法确定资源大小"))
         val (total, resumed) = probe
 
         val fresh: Boolean = existing == 0L
@@ -147,10 +151,10 @@ class DownloadManager(
         partFile: File,
         existing: Long,
         resumed: Boolean,
-    ): AppResult<Unit> {
+    ): AppResult<Unit> = try {
         val builder: Request.Builder = Request.Builder().url(url)
         if (resumed) builder.header("Range", "bytes=$existing-")
-        return client.newCall(builder.build()).execute().use { resp: Response ->
+        client.newCall(builder.build()).execute().use { resp: Response ->
             coroutineContext.ensureActive()
             when {
                 resp.code == 206 || resp.code == 200 -> {
@@ -180,6 +184,9 @@ class DownloadManager(
                 else -> AppResult.Err(AppError.Network("http_${resp.code}"))
             }
         }
+    } catch (t: Throwable) {
+        coroutineContext.ensureActive()
+        AppResult.Err(AppError.Network("io_failed", cause = t))   // 审计高危#2：网络异常不得击穿调度器协程
     }
 
     /** 分片并发：仅对全新下载；任何分片失败整体降级为重试（下一轮走单流）。 */
@@ -206,7 +213,8 @@ class DownloadManager(
             }
             AppResult.Ok(Unit)
         } catch (t: Throwable) {
-            partFile.delete()
+            coroutineContext.ensureActive()
+            // 审计中危#15：分片失败保留已成功分片（断点续传价值），仅整体报错重试
             AppResult.Err(AppError.Network("chunk_failed", cause = t))
         }
     }

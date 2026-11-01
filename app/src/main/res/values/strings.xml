@@ -45,6 +45,8 @@
     <string name="settings_crash_capture_desc">开启后崩溃时写 files/logs/crash-*.txt，用于问题反馈；默认关闭以保护性能与隐私。</string>
     <string name="settings_wifi_only">仅 Wi-Fi 下载（默认开）</string>
     <string name="settings_wifi_only_desc">关闭后蜂窝网络也可下载；建议保持开启以保护流量。</string>
+    <string name="settings_developer_mode">开发者模式（默认关）</string>
+    <string name="settings_developer_mode_desc">开启后记录全量详尽日志（含环境探测、下载/安装各环节耗时）到 files/logs/launcher.log，用于问题定位；日志较大且含设备信息，问题解决后建议关闭。</string>
 
     <!-- 游戏设置区（Step 5） -->
     <string name="settings_section_game">游戏设置</string>

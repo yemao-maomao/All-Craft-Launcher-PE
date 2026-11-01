@@ -13,18 +13,16 @@ import org.aclpe.core.env.probe.EnvProbeReport
 import org.aclpe.core.env.probe.EnvScope
 import org.aclpe.core.env.probe.JreProbeResult
 import org.aclpe.core.env.store.EnvItemEntity
+import timber.log.Timber
 import org.aclpe.core.env.store.EnvStore
 import org.aclpe.core.env.model.ComponentProbeResult
 
-/** 组件下载规格（由调用方提供：Step 2 起从 JRE/资源清单解析而来）。 */
+/** 缁勪欢涓嬭浇瑙勬牸锛堢敱璋冪敤鏂规彁渚涳細Step 2 璧蜂粠 JRE/璧勬簮娓呭崟瑙ｆ瀽鑰屾潵锛夈€?*/
 data class EnvDownloadSpec(val url: String, val sha256: String, val sizeBytes: Long? = null)
 
 /**
- * 环境补齐编排（设计文档 §5）：探测 → 与 DB reconcile → 缺失/损坏项入队下载。
- * 幂等：重复执行安全，状态机保证已在途任务不被重复入队；
- * 恢复：状态全部落 DB，进程被杀后下次启动的 reconcile 即为续跑入口。
- * 协程作用域由调用方注入，本类不持有任何作用域。
- */
+ * 鐜琛ラ綈缂栨帓锛堣璁℃枃妗?搂5锛夛細鎺㈡祴 鈫?涓?DB reconcile 鈫?缂哄け/鎹熷潖椤瑰叆闃熶笅杞姐€? * 骞傜瓑锛氶噸澶嶆墽琛屽畨鍏紝鐘舵€佹満淇濊瘉宸插湪閫斾换鍔′笉琚噸澶嶅叆闃燂紱
+ * 鎭㈠锛氱姸鎬佸叏閮ㄨ惤 DB锛岃繘绋嬭鏉€鍚庝笅娆″惎鍔ㄧ殑 reconcile 鍗充负缁窇鍏ュ彛銆? * 鍗忕▼浣滅敤鍩熺敱璋冪敤鏂规敞鍏ワ紝鏈被涓嶆寔鏈変换浣曚綔鐢ㄥ煙銆? */
 class EnvBootstrap(
     private val probe: EnvProbe,
     private val scheduler: DownloadScheduler,
@@ -32,12 +30,19 @@ class EnvBootstrap(
     private val layout: EnvLayout,
 ) {
 
+    /** 单调时钟（毫秒）：JVM 单测与 Android 通用（不引 android.os.SystemClock）。 */
+    private fun elapsedRealtime(): Long = System.nanoTime() / 1_000_000L
+
     /**
-     * 启动 reconcile。返回探测报告；缺失/损坏项若 [downloadSpecs] 提供了规格则自动入队。
-     */
+     * 鍚姩 reconcile銆傝繑鍥炴帰娴嬫姤鍛婏紱缂哄け/鎹熷潖椤硅嫢 [downloadSpecs] 鎻愪緵浜嗚鏍煎垯鑷姩鍏ラ槦銆?     */
     suspend fun reconcile(scope: EnvScope, downloadSpecs: Map<String, EnvDownloadSpec>): AppResult<EnvProbeReport> =
         try {
+            val startedAt: Long = elapsedRealtime()
             val report: EnvProbeReport = probe.probe(scope, layout)
+            Timber.d("env reconcile: probe done in %dms, jres=%s natives=%s assets=%s",
+                elapsedRealtime() - startedAt,
+                report.jres.entries.joinToString { (major, r) -> "$major:${r::class.simpleName}" },
+                report.natives.size, report.assetsIndexes.size)
             val now: Long = System.currentTimeMillis()
 
             report.jres.forEach { (major, result) ->
@@ -70,7 +75,7 @@ class EnvBootstrap(
             AppResult.Err(AppError.Env("env_reconcile_failed", cause = t))
         }
 
-    /** 幂等清理 downloads/tmp（设计文档 §5.3）：在途任务 .part 保留，其余删除。 */
+    /** 骞傜瓑娓呯悊 downloads/tmp锛堣璁℃枃妗?搂5.3锛夛細鍦ㄩ€斾换鍔?.part 淇濈暀锛屽叾浣欏垹闄ゃ€?*/
     suspend fun cleanupTmp() {
         val active: Set<String> = store.observeActiveComponentSet()
         val (toDelete, _) = org.aclpe.core.env.store.TmpCleaner.plan(layout.downloadsTmp, active)
@@ -82,9 +87,10 @@ class EnvBootstrap(
         val state: EnvItemState = current?.let { runCatching { EnvItemState.valueOf(it.state) }.getOrNull() } ?: EnvItemState.UNKNOWN
         val retryCount: Int = current?.retryCount ?: 0
 
-        // 在途任务由调度器推进（进度/成功/失败事件回写），reconcile 不打扰 → 幂等且不打断续传
-        if (state in ACTIVE_STATES) return
+        // 在途任务由调度器推进，reconcile 不打扰——例外：探测 READY（磁盘事实绝对覆盖）必须翻 READY，
+        // 否则资产/网络路径完成后 env_items 停在 QUEUED，UI 永远「处理中」（真机实证卡死点）。
 
+        if (state in ACTIVE_STATES && event != EnvEvent.ProbeReady) return
         val transition: EnvTransition = EnvStateMachine.next(state, event, retryCount)
 
         val updated: EnvItemEntity = EnvItemEntity(
@@ -137,11 +143,11 @@ class EnvBootstrap(
     }
 }
 
-/** 存储扩展：读取「活动（在途）组件」集合，供 tmp 清理判断 .part 去留。 */
+/** 瀛樺偍鎵╁睍锛氳鍙栥€屾椿鍔紙鍦ㄩ€旓級缁勪欢銆嶉泦鍚堬紝渚?tmp 娓呯悊鍒ゆ柇 .part 鍘荤暀銆?*/
 private suspend fun EnvStore.observeActiveComponentSet(): Set<String> {
     val active: Set<EnvItemState> = setOf(
         EnvItemState.QUEUED, EnvItemState.DOWNLOADING, EnvItemState.PAUSED,
-        EnvItemState.VERIFYING, EnvItemState.INSTALLING, EnvItemState.FAILED,
+        EnvItemState.VERIFYING, EnvItemState.INSTALLING,
     )
     return observe().firstOrNull().orEmpty()
         .filter { runCatching { EnvItemState.valueOf(it.state) }.getOrNull() in active }

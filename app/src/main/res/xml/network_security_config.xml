@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置（审计高危#4）：
+  - 默认禁明文（targetSdk 35 语义保持），全应用 https 优先；
+  - 唯一例外：oss.mcddos.top（社区 JRE 镜像，仅提供 http 端点）。
+    风险控制：下载物 sha256 应用内置 pin，内容被篡改即校验失败拒装；
+    该域名白名单不授予其他任何 http 来源。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">oss.mcddos.top</domain>
+    </domain-config>
+</network-security-config>

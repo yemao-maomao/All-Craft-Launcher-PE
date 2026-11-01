@@ -65,6 +65,8 @@ class EnvBootstrapTest {
         val (layout, store, scheduler) = setup()
         val b: EnvBootstrap = bootstrap(layout, store, scheduler)
         b.reconcile(scope17, mapOf("jre:17" to spec17))
+        assertEquals("after-1st state", EnvItemState.QUEUED.name, store.snapshot().first().state)
+        assertEquals("after-1st enqueued", 1, scheduler.enqueued.size)
         b.reconcile(scope17, mapOf("jre:17" to spec17))
         assertEquals(1, scheduler.enqueued.size)
         assertEquals(EnvItemState.QUEUED.name, store.snapshot().first().state)

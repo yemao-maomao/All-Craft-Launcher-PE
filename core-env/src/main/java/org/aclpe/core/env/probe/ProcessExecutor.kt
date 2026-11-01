@@ -42,8 +42,10 @@ class RealProcessExecutor : ProcessExecutor {
 
         val finished: Boolean = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
         if (!finished) process.destroyForcibly()
-        outThread.join(2_000L)
-        errThread.join(2_000L)
+        // 审计中危#19：先等输出线程收尾再取 exitValue/output，
+        // 超时强杀场景给线程更宽裕的收尾窗口（否则输出可能截断）
+        outThread.join(5_000L)
+        errThread.join(5_000L)
         process.inputStream.close()
         process.errorStream.close()
 

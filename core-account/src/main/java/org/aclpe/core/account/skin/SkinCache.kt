@@ -29,6 +29,12 @@ class SkinCache(
 
     suspend fun getSkin(session: AuthSession, skinUrl: String?): AppResult<SkinResult?> = withContext(Dispatchers.IO) {
         if (skinUrl == null) return@withContext AppResult.Ok(null)
+        // 审计中危#18：皮肤纹理只允许 https（textures.minecraft.net 官方即 https），拒绝明文；
+        // 例外：localhost/127.0.0.1（单测 MockWebServer 场景，不出设备）
+        val isLocalhost: Boolean = skinUrl.startsWith("http://localhost") || skinUrl.startsWith("http://127.0.0.1")
+        if (!skinUrl.startsWith("https://") && !isLocalhost) {
+            return@withContext AppResult.Err(AppError.Network("insecure_skin_url"))
+        }
         try {
             cacheDir.mkdirs()
             val png: File = File(cacheDir, "${session.account.uuid}.png")

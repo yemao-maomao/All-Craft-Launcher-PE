@@ -47,12 +47,13 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
 
     val probe: EnvProbe = EnvProbe(RealProcessExecutor())
 
-    val manager: DownloadManager = DownloadManager(
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(600, TimeUnit.SECONDS)
-            .build()
-    )
+    /** 共享 OkHttp 实例（审计低危#26：单连接池/线程池；下载与皮肤复用）。 */
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(600, TimeUnit.SECONDS)
+        .build()
+
+    val manager: DownloadManager = DownloadManager(httpClient)
 
     val scheduler: DownloadScheduler = AssetFirstScheduler(
         delegate = DownloadSchedulerImpl(
@@ -62,6 +63,16 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
             downloadTmpDir = layout.downloadsTmp,
             networkPolicy = wifiPolicy(context, appSettings),
             onSucceeded = { task: EnvDownloadTask, file: File -> installJre(task, file) },
+            // 审计高危#3：任务终态回写 env_items，消除「QUEUED 永久死区」
+            // （成功 → 等探测收敛 READY 由 HomeViewModel 观察者触发；失败 → FAILED 用户可见可重试）
+            onTerminal = { component: String, succeeded: Boolean, errorCode: String? ->
+                runCatching {
+                    val current: org.aclpe.core.env.store.EnvItemEntity? = store.get(component)
+                    if (current != null && succeeded.not()) {
+                        store.upsert(current.copy(state = org.aclpe.core.env.fsm.EnvItemState.FAILED.name, errorCode = errorCode))
+                    }
+                }
+            },
         ),
         scope = appScope,
         assetSource = AssetJreCache(context)::fileFor,
@@ -84,7 +95,7 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
         tokenStore = EncryptedTokenStore(context.filesDir),
     )
 
-    val skinCache: SkinCache = SkinCache(managerClient(), File(context.filesDir, "cache/skins"))
+    val skinCache: SkinCache = SkinCache(httpClient, File(context.filesDir, "cache/skins"))
 
     val versionDao: VersionDao = LauncherDatabase.get(context).versionDao()
 
@@ -99,11 +110,6 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     val launchPlanBuilder: LaunchPlanBuilder = LaunchPlanBuilder(layout)
 
     val gameProcessStarter: GameProcessStarter = RealGameProcessStarter()
-
-    private fun managerClient(): OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
 
     /** 网络策略：仅 Wi-Fi 开关（AppSettings，默认开）→ 当前网络是否 Wi-Fi/以太网。 */
     private fun wifiPolicy(context: Context, appSettings: AppSettings): suspend () -> Boolean = {

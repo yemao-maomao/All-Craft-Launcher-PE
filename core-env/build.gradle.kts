@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":core-common"))
 
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.timber)
     // api 暴露 Room：EnvDatabase（RoomDatabase 子类）出现在模块公共 API（EnvStore 装配），
     // 消费方（app）编译期需要访问其超类
     api(libs.room.runtime)

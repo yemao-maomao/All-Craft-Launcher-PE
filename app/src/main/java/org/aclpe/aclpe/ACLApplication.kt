@@ -26,10 +26,14 @@ class ACLApplication : Application() {
         EnvDependencies(this, applicationScope, AppSettings(this))
     }
 
+    /** 文件日志树（可调级别：开发者模式降到 VERBOSE）。 */
+    private val fileLoggingTree: FileLoggingTree by lazy { FileLoggingTree(File(filesDir, "logs")) }
+
     override fun onCreate() {
         super.onCreate()
         setupLogging()
         installCrashCatcher()
+        observeDeveloperMode()
         Timber.i(
             "ACL-PE starting: version=%s build=%s abis=%s",
             BuildConfig.VERSION_NAME,
@@ -40,9 +44,10 @@ class ACLApplication : Application() {
 
     private fun setupLogging() {
         // 文件双写（恒开）：files/logs/launcher.log，落盘前统一脱敏
+        // 默认 INFO+；开发者模式（设置页）降为全级别（见 observeDeveloperMode）
         val logDir: File = File(filesDir, "logs").apply { mkdirs() }
-        Timber.plant(FileLoggingTree(logDir))
-        // 控制台输出（仅 debug）：同样过脱敏，避免调试时把 token 刷进 logcat
+        Timber.plant(fileLoggingTree)
+        // 控制台输出（仅 debug 构建）：同样过脱敏，避免调试时把 token 刷进 logcat
         if (BuildConfig.DEBUG) {
             val redactor: LogRedactor = LogRedactor()
             Timber.plant(object : Timber.DebugTree() {
@@ -50,6 +55,20 @@ class ACLApplication : Application() {
                     super.log(priority, tag, redactor.redact(message), t)
                 }
             })
+        }
+    }
+
+    /** 开发者模式（默认关）：开 → 文件日志降到 VERBOSE（全量埋点落盘）；关 → 恢复 INFO。 */
+    private fun observeDeveloperMode() {
+        applicationScope.launch {
+            AppSettings(this@ACLApplication).developerMode.collect { enabled ->
+                fileLoggingTree.minPriority = if (enabled) {
+                    FileLoggingTree.PRIORITY_VERBOSE
+                } else {
+                    FileLoggingTree.PRIORITY_INFO
+                }
+                Timber.i("developer mode %s (file log minPriority=%d)", if (enabled) "ON" else "OFF", fileLoggingTree.minPriority)
+            }
         }
     }
 

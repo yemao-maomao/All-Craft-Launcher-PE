@@ -36,6 +36,7 @@ import org.aclpe.core.env.store.VersionEntity
 import org.aclpe.core.launch.model.LaunchAuth
 import org.aclpe.core.launch.model.LaunchContext
 import org.aclpe.core.launch.model.MemoryTier
+import timber.log.Timber
 import java.io.File
 
 /** 环境卡片 UI 条目：组件状态 + 下载任务状态/进度。 */
@@ -111,7 +112,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refresh() {
-        viewModelScope.launch {
+        // IO 调度器（关键）：reconcile → EnvProbe 会阻塞执行 java -version（15s 超时/槽位），
+        // 跑在 viewModelScope 默认 Main 会冻结 UI 甚至 ANR（真机实证「处理中卡死」的一半根因）。
+        viewModelScope.launch(Dispatchers.IO) {
             probing.value = true
             // 幂等：tmp 清理 + reconcile（重复调用安全，在途任务不被打断）；
             // jre:21 槽位为 atLeast 语义（实际安装社区 JRE25，方案 B）
@@ -221,7 +224,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 stdoutLog = File(profileDir, "logs/game-stdout.log"),
                 stderrLog = File(profileDir, "logs/game-stderr.log"),
             )
-            _launchMessage.value = if (start.isOk) "游戏进程已启动" else "启动失败：${start.errorOrNull()?.code}"
+            if (start.isOk) {
+                // 审计中危#14：游戏运行登记（「运行中禁止覆盖 options.txt」硬约束生效源）
+                org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(true)
+                _launchMessage.value = "游戏进程已启动"
+                // 进程退出后解除登记（IO 等待不阻塞 UI）
+                val process: org.aclpe.core.launch.process.GameProcess = start.getOrNull()!!
+                viewModelScope.launch(Dispatchers.IO) {
+                    val exit: Int = process.waitFor()
+                    org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(false)
+                    Timber.i("game exited: code=%d", exit)
+                }
+            } else {
+                _launchMessage.value = "启动失败：${start.errorOrNull()?.code}"
+            }
         }
     }
 }

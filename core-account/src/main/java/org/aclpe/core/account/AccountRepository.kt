@@ -21,6 +21,13 @@ class AccountRepository(
 
     private val accounts: MutableStateFlow<List<Account>> = MutableStateFlow(emptyList())
 
+    init {
+        // 审计高危#5：进程重启后内存缓存为空 → activeAccount 恒 null → 无法启动游戏。
+        // 构造即播种（同步 readAll 经 suspend 接口 → runBlocking 仅限构造期一次性兜底；
+        // 调用方（EnvDependencies lazy）在非主线程首次访问，风险可控）。
+        kotlinx.coroutines.runBlocking { refreshCache() }
+    }
+
     fun observeAccounts(): Flow<List<Account>> = accounts
 
     /** 登录：provider.login → 持久化 → 设为该 Profile 活跃账号。 */

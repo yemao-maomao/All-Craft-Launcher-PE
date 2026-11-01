@@ -27,7 +27,17 @@ open class FileLoggingTree(
     private val lock: Any = Any()
     private val formatter: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
 
+    /**
+     * 最低记录优先级（稳定常量：2=V 3=D 4=I 5=W 6=E，不引用 android.util.Log 以保 JVM 单测）。
+     * 默认 INFO（4）：DEBUG 级埋点不落盘（性能与日志卫生）；
+     * 开发者模式（设置页开关）把它降为 2 → 全量详尽日志（问题定位用）。
+     * @Volatile：可在任意线程动态切换（ACLApplication 监听设置流）。
+     */
+    @Volatile
+    var minPriority: Int = PRIORITY_INFO
+
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        if (priority < minPriority) return
         val level: String = when (priority) {
             2 -> "V"      // android.util.Log.VERBOSE
             3 -> "D"      // android.util.Log.DEBUG
@@ -71,5 +81,10 @@ open class FileLoggingTree(
         const val LOG_FILE_NAME: String = "launcher.log"
         const val DEFAULT_MAX_FILE_BYTES: Long = 2L * 1024L * 1024L
         const val DEFAULT_KEEP_FILES: Int = 3
+
+        /** 稳定优先级常量（与 android.util.Log 数值一致，但不引用它）。 */
+        const val PRIORITY_VERBOSE: Int = 2
+        const val PRIORITY_DEBUG: Int = 3
+        const val PRIORITY_INFO: Int = 4
     }
 }

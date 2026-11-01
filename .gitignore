@@ -10,20 +10,19 @@ captures/
 *.iml
 .vscode/
 
-# 本机配置（不提交）
-local.properties
+# 鏈満閰嶇疆锛堜笉鎻愪氦锛?local.properties
 *.keystore
 *.jks
 
-# 系统
+# 绯荤粺
 .DS_Store
 Thumbs.db
 
-# 输出
+# 杈撳嚭
 out/
 dist/
 *.log
 acl-recovery/
 
-# ���� JRE �ʲ���92MB������⣻�� scripts/fetch-jre-assets.cmd ��ȡ��
+# 内置 JRE 资产（92MB，不入库；用 scripts/fetch-jre-assets.cmd 拉取）
 app/src/main/assets/runtimes/*.xz

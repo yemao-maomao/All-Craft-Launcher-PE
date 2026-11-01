@@ -58,6 +58,8 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = false)
     val wifiOnly: Boolean by appSettings.downloadWifiOnly
         .collectAsStateWithLifecycle(initialValue = true)
+    val developerMode: Boolean by appSettings.developerMode
+        .collectAsStateWithLifecycle(initialValue = false)
     val activeAccount: Account? by accountViewModel.activeAccount.collectAsStateWithLifecycle()
     val accountMessage: String? by accountViewModel.message.collectAsStateWithLifecycle()
     val gameSettingsState by gameSettingsViewModel.uiState.collectAsStateWithLifecycle()
@@ -142,6 +144,25 @@ fun SettingsScreen(
             Switch(
                 checked = wifiOnly,
                 onCheckedChange = { scope.launch { appSettings.setDownloadWifiOnly(it) } },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_developer_mode),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = stringResource(R.string.settings_developer_mode_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = developerMode,
+                onCheckedChange = { scope.launch { appSettings.setDeveloperMode(it) } },
             )
         }
 

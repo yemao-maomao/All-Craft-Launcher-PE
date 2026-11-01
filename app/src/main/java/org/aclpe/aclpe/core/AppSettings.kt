@@ -16,6 +16,7 @@ object AppSettingsKeys {
     val CRASH_CAPTURE_ENABLED: Preferences.Key<Boolean> = booleanPreferencesKey("crash_capture_enabled")
     val THEME_MODE: Preferences.Key<String> = stringPreferencesKey("theme_mode")
     val DOWNLOAD_WIFI_ONLY: Preferences.Key<Boolean> = booleanPreferencesKey("download_wifi_only")
+    val DEVELOPER_MODE: Preferences.Key<Boolean> = booleanPreferencesKey("developer_mode")
 }
 
 enum class ThemeMode {
@@ -39,6 +40,10 @@ class AppSettings(private val context: Context) {
     val downloadWifiOnly: Flow<Boolean> =
         context.appSettingsDataStore.data.map { it[AppSettingsKeys.DOWNLOAD_WIFI_ONLY] ?: true }
 
+    /** 开发者模式（默认关）：全量 DEBUG 日志落盘 + logcat 调试树 + 环境探测详情。 */
+    val developerMode: Flow<Boolean> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.DEVELOPER_MODE] ?: false }
+
     suspend fun setCrashCaptureEnabled(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.CRASH_CAPTURE_ENABLED] = value }
     }
@@ -49,5 +54,9 @@ class AppSettings(private val context: Context) {
 
     suspend fun setDownloadWifiOnly(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.DOWNLOAD_WIFI_ONLY] = value }
+    }
+
+    suspend fun setDeveloperMode(value: Boolean) {
+        context.appSettingsDataStore.edit { it[AppSettingsKeys.DEVELOPER_MODE] = value }
     }
 }
