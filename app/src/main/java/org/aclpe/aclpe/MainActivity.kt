@@ -12,6 +12,7 @@ import org.aclpe.aclpe.core.ThemeMode
 import org.aclpe.aclpe.ui.account.AccountViewModel
 import org.aclpe.aclpe.ui.home.HomeViewModel
 import org.aclpe.aclpe.ui.nav.AppNavHost
+import org.aclpe.aclpe.ui.settings.GameSettingsViewModel
 import org.aclpe.aclpe.ui.theme.AclPeTheme
 
 /** 单 Activity 壳：ABI 守卫 + 主题 + 导航宿主。 */
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
     private val appSettings: AppSettings by lazy { AppSettings(applicationContext) }
     private val homeViewModel: HomeViewModel by viewModels()
     private val accountViewModel: AccountViewModel by viewModels()
+    private val gameSettingsViewModel: GameSettingsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
                     appSettings = appSettings,
                     homeViewModel = homeViewModel,
                     accountViewModel = accountViewModel,
+                    gameSettingsViewModel = gameSettingsViewModel,
                 )
             }
         }

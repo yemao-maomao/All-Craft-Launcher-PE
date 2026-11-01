@@ -73,6 +73,13 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
 
     val versionDao: VersionDao = LauncherDatabase.get(context).versionDao()
 
+    // ---- Step 5：设置存储（Profile 隔离 + 默认模板 + 触控方案） ----
+    val settingsStores: org.aclpe.core.settings.store.SettingsStores =
+        org.aclpe.core.settings.store.SettingsStores(context.filesDir)
+
+    /** 游戏运行中禁止覆盖 options.txt（硬性约束）。 */
+    val gameRunningCheck: () -> Boolean = { GameProcessRegistry.isRunning }
+
     // ---- Step 3：启动链路装配 ----
     val launchPlanBuilder: LaunchPlanBuilder = LaunchPlanBuilder(layout)
 

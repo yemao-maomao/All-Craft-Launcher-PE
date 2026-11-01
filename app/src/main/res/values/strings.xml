@@ -46,6 +46,14 @@
     <string name="settings_wifi_only">仅 Wi-Fi 下载（默认开）</string>
     <string name="settings_wifi_only_desc">关闭后蜂窝网络也可下载；建议保持开启以保护流量。</string>
 
+    <!-- 游戏设置区（Step 5） -->
+    <string name="settings_section_game">游戏设置</string>
+    <string name="gs_group_video">画面</string>
+    <string name="gs_group_sound">声音</string>
+    <string name="gs_group_other">其他</string>
+    <string name="gs_group_control">控制</string>
+    <string name="gs_group_launcher">启动器侧（不进 options.txt）</string>
+
     <!-- 账号区（Step 4） -->
     <string name="settings_section_account">账号</string>
     <string name="account_none">未登录账号</string>

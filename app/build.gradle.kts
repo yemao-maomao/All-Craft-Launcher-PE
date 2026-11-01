@@ -78,6 +78,7 @@ dependencies {
     implementation(project(":core-download"))
     implementation(project(":core-launch"))
     implementation(project(":core-account"))
+    implementation(project(":core-settings"))
 
     // Compose Multiplatform（当前仅 Android 目标；模块边界见 docs/design/step1-skeleton.md）
     implementation(compose.runtime)

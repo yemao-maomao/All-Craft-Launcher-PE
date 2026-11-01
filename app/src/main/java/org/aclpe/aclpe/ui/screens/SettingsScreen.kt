@@ -38,15 +38,20 @@ import org.aclpe.aclpe.R
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.core.ThemeMode
 import org.aclpe.aclpe.ui.account.AccountViewModel
+import org.aclpe.aclpe.ui.settings.GameSettingsViewModel
 import org.aclpe.core.account.model.Account
 import org.aclpe.core.account.model.AccountType
 
 /**
- * 设置页：启动器（主题/崩溃捕获/仅 Wi-Fi 下载）+ 账号区（Step 4）。
+ * 设置页：启动器（主题/崩溃捕获/仅 Wi-Fi 下载）+ 账号区（Step 4）+ 游戏设置区（Step 5）。
  * 离线账户限制明确标注（无皮肤同步、无法联机、可能违反 EULA），绝不做成默认推荐。
  */
 @Composable
-fun SettingsScreen(appSettings: AppSettings, accountViewModel: AccountViewModel) {
+fun SettingsScreen(
+    appSettings: AppSettings,
+    accountViewModel: AccountViewModel,
+    gameSettingsViewModel: GameSettingsViewModel,
+) {
     val themeMode: ThemeMode by appSettings.themeMode
         .collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM)
     val crashCapture: Boolean by appSettings.crashCaptureEnabled
@@ -55,6 +60,8 @@ fun SettingsScreen(appSettings: AppSettings, accountViewModel: AccountViewModel)
         .collectAsStateWithLifecycle(initialValue = true)
     val activeAccount: Account? by accountViewModel.activeAccount.collectAsStateWithLifecycle()
     val accountMessage: String? by accountViewModel.message.collectAsStateWithLifecycle()
+    val gameSettingsState by gameSettingsViewModel.uiState.collectAsStateWithLifecycle()
+    val gameSettingsMessage: String? by gameSettingsViewModel.message.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -64,6 +71,12 @@ fun SettingsScreen(appSettings: AppSettings, accountViewModel: AccountViewModel)
         accountMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             accountViewModel.consumeMessage()
+        }
+    }
+    LaunchedEffect(gameSettingsMessage) {
+        gameSettingsMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            gameSettingsViewModel.consumeMessage()
         }
     }
 
@@ -186,6 +199,14 @@ fun SettingsScreen(appSettings: AppSettings, accountViewModel: AccountViewModel)
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = stringResource(R.string.settings_section_game),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        GameSettingsSection(gameSettingsViewModel)
     }
 
     if (showCreateDialog) {
