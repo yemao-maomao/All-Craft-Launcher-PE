@@ -12,6 +12,9 @@ import java.io.File
  */
 class EnvLayout(private val filesRoot: File) {
 
+    /** files 根（ANDROID_DATA 等环境注入用）。 */
+    val root: File get() = filesRoot
+
     val envRoot: File = File(filesRoot, "env")
     val downloadsTmp: File = File(filesRoot, "downloads/tmp")
     val logsDir: File = File(filesRoot, "logs")
