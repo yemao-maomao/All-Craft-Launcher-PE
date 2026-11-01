@@ -29,6 +29,69 @@ class EnvProbeTest {
 
     private fun okExec(output: String) = ExecResult(exitCode = 0, output = output, timedOut = false)
 
+    /** 模拟真机：Android 10+ W^X 禁令使 ProcessBuilder.start() 抛 IOException（exec 永不可用）。 */
+    private object ThrowingExecutor : ProcessExecutor {
+        override fun execute(
+            command: List<String>,
+            env: Map<String, String>,
+            workingDir: File?,
+            timeoutMs: Long,
+        ): ExecResult = throw java.io.IOException("exec blocked by SELinux (W^X)")
+    }
+
+    // ---------- exec 不可用（真机主路径，2026-11-02 架构修正） ----------
+
+    @Test
+    fun `exec 不可用_静态结构与版本吻合判 Ok`() {
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        makeJre(layout, 17)
+        val probe: EnvProbe = EnvProbe(ThrowingExecutor)
+        val result: JreProbeResult = probe.probeJre(layout, 17)
+        assertTrue("真机主路径应静态判 Ok，实际 $result", result is JreProbeResult.Ok)
+        assertEquals(17, (result as JreProbeResult.Ok).info.major)
+    }
+
+    @Test
+    fun `exec 不可用_静态版本不符判 WrongVersion`() {
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        // 槽位 17 的结构完整，但 release 文件写着 21（装错包）
+        makeJre(layout, 17)
+        layout.jreReleaseFile(17).writeText("JAVA_VERSION=\"21\"")
+        val probe: EnvProbe = EnvProbe(ThrowingExecutor)
+        assertEquals(JreProbeResult.WrongVersion(expected = 17, actual = 21), probe.probeJre(layout, 17))
+    }
+
+    @Test
+    fun `exec 不可用_atLeast 槽位接受更高版本`() {
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        // 21 槽位实际装 JRE25（release 写 25）：atLeast 语义接受
+        makeJre(layout, 21)
+        layout.jreReleaseFile(21).writeText("JAVA_VERSION=\"25\"")
+        val probe: EnvProbe = EnvProbe(ThrowingExecutor)
+        assertTrue(probe.probeJre(layout, 21, atLeast = true) is JreProbeResult.Ok)
+    }
+
+    @Test
+    fun `exec 不可用_release 无版本行判 ExecFailed`() {
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        makeJre(layout, 17)
+        layout.jreReleaseFile(17).writeText("IMPLEMENTOR=\"Pojav\"\n")
+        val probe: EnvProbe = EnvProbe(ThrowingExecutor)
+        val result: JreProbeResult = probe.probeJre(layout, 17)
+        assertTrue(result is JreProbeResult.ExecFailed)
+        assertEquals("release_unparsed", (result as JreProbeResult.ExecFailed).code)
+    }
+
+    @Test
+    fun `exec 抛异常不再击穿整个探测`() {
+        // 回归锁：此前异常沿 probe()→reconcile() 上抛，env_items 永停 QUEUED（「处理中」卡死根因）
+        val layout: EnvLayout = EnvLayout(tempRoot())
+        makeJre(layout, 17)
+        val probe: EnvProbe = EnvProbe(ThrowingExecutor)
+        val report: EnvProbeReport = probe.probe(EnvScope(jreMajors = setOf(17)), layout)
+        assertEquals(EnvState.READY, report.state)
+    }
+
     // ---------- JRE ----------
 
     @Test

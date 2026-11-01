@@ -308,3 +308,38 @@ stateDiagram-v2
 3. 骨架期探测范围固定 JRE 17/21；natives/assets 的 EnvScope 注入由 Step 2 在版本安装后提供。
 4. `Step2PendingDownloadScheduler` 为诚实占位（非假实现），Step 2 替换。
 5. Room `exportSchema=false`（骨架期）；CI/迁移管理阶段再启用 schema 导出。
+
+---
+
+## 12. 架构修正记录（2026-11-02，真机「处理中」卡死根因闭环）
+
+### 12.1 根因
+
+真机环境补齐完成后卡片永停「处理中」。三层叠加：
+
+1. **设备级（本节主因）**：Android 10+（targetSdk ≥ 29）SELinux/W^X 禁止 exec 应用数据目录内二进制，
+   `ProcessBuilder(files/.../bin/java).start()` 必抛 IOException → 异常沿 `probe()`→`reconcile()` 上抛、
+   整个 reconcile 失败 → `env_items` 永停 QUEUED。JVM 单测用 Fake 执行器掩盖了该路径。
+2. 逻辑层：reconcile 对在途状态短路 + 修复语句曾被乱码注释吞掉（见 git 历史与运行记忆）。
+3. 构建层：Gradle daemon VFS 不感知 robocopy 外部修改，调试期多次跑旧字节码造成「修复时灵时不灵」假象。
+
+### 12.2 修正（FCL 式：环境就绪以文件事实为准）
+
+- `EnvProbe.probeJre` 改为**静态优先**：结构四文件 + `release` 文件 `JAVA_VERSION` 行判定就绪
+  （`1.8.0_292` 遗留格式同样解析）；exec 降级为「尽力而为的诊断」——只在可用时提供位宽/VM/真实版本的
+  更强判定，抛异常（真机常态）时落到静态结论，**不再击穿 reconcile**。
+- 这与 FCL 的做法同构：其运行时就绪同样基于文件事实；游戏真正启动用 **JNI 进程内 JVM**
+  （而非子进程 exec）。
+
+### 12.3 后续必须项（已列入路线图）
+
+**游戏启动路径同样受 W^X 禁令影响**：`RealGameProcessStarter` 用 ProcessBuilder 拉 `java`
+在真机同样会失败（报 `game_process_start_failed`）。正确方案即 FCL/Pojav 路线：
+native 桥 `dlopen libjvm.so` + `JNI_CreateJavaVM` 进程内启动 JVM（独立里程碑）。
+在此之前「启动游戏」按钮在真机不可用属预期，环境就绪判定不受影响。
+
+### 12.4 验证
+
+新增 5 个真机路径单测（`EnvProbeTest`）：exec 抛异常时静态吻合→Ok / 静态版本不符→WrongVersion /
+atLeast 槽位 / release 无版本行→ExecFailed(release_unparsed) / 整体探测不被异常击穿。
+全项目 163/163 绿。

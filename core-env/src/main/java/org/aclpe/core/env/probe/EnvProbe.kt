@@ -85,8 +85,16 @@ data class EnvProbeReport(
 }
 
 /**
- * 环境探测器（设计文档 §2）：JRE 静态+动态双检、natives 标记+抽查、assets 索引 SHA-1。
+ * 环境探测器（设计文档 §2）：JRE 静态优先 + 动态尽力而为、natives 标记+抽查、assets 索引 SHA-1。
  * 事实源是文件与运行态；DB/标记只是缓存，不一致时以探测为准回写（幂等自愈）。
+ *
+ * 2026-11-02 架构修正（FCL 式，真机「处理中」卡死根因）：
+ * Android 10+（targetSdk ≥ 29）SELinux/W^X 禁止 exec 应用数据目录内的二进制，
+ * `ProcessBuilder(files/.../bin/java).start()` 必抛 IOException——真机上 exec 探测**永远不可用**，
+ * 异常曾沿 probe()→reconcile() 上抛导致整个 reconcile 失败、env_items 永停 QUEUED。
+ * 因此就绪判定改为：静态结构（bin/java、libjvm、libjli、release 文件）+ release 文件版本号；
+ * exec 仅在可用时（JVM 测试/少数环境）提供更丰富的判定（位宽/VM/真实版本），失败不影响静态结论。
+ * （参考 FCL：其运行时就绪同样以文件事实为准；游戏真正启动走 JNI 进程内 JVM，见设计文档已知问题。）
  */
 class EnvProbe(private val executor: ProcessExecutor) {
 
@@ -119,28 +127,72 @@ class EnvProbe(private val executor: ProcessExecutor) {
         }
         if (missingNames.isNotEmpty()) return JreProbeResult.Partial(missingNames)
 
-        val result: ExecResult = executor.execute(
-            command = listOf(javaBin.absolutePath, "-version"),
-            env = mapOf(
-                "LD_LIBRARY_PATH" to layout.jreLibPathCandidates(javaMajor),
-                "HOME" to dir.absolutePath,
-                "TMPDIR" to dir.absolutePath,
-            ),
-            workingDir = dir,
-            timeoutMs = TIMEOUT_MS,
-        )
-        if (result.timedOut) return JreProbeResult.ExecFailed("timeout", "java -version 超时（${TIMEOUT_MS}ms）")
-        val info: JreVersionInfo = JreVersionParser.parse(result.output)
-            ?: return JreProbeResult.ExecFailed("parse", "无法解析版本输出: " + result.output.take(200))
+        // 静态版本判定（release 文件）：exec 不可用时的权威结论
+        val releaseMajor: Int? = readReleaseMajor(layout.jreReleaseFile(javaMajor))
+
+        // 动态 exec：尽力而为的诊断（真机常态 = 抛 IOException，见类注释）
+        val result: ExecResult? = try {
+            executor.execute(
+                command = listOf(javaBin.absolutePath, "-version"),
+                env = mapOf(
+                    "LD_LIBRARY_PATH" to layout.jreLibPathCandidates(javaMajor),
+                    "HOME" to dir.absolutePath,
+                    "TMPDIR" to dir.absolutePath,
+                ),
+                workingDir = dir,
+                timeoutMs = TIMEOUT_MS,
+            )
+        } catch (t: Throwable) {
+            null   // exec 不可用（Android 10+ W^X 禁令等）：落到静态判定
+        }
+        if (result != null) {
+            if (result.timedOut) return JreProbeResult.ExecFailed("timeout", "java -version 超时（${TIMEOUT_MS}ms）")
+            val info: JreVersionInfo = JreVersionParser.parse(result.output)
+                ?: return JreProbeResult.ExecFailed("parse", "无法解析版本输出: " + result.output.take(200))
+            return when {
+                info.major != javaMajor && !(atLeast && info.major > javaMajor) ->
+                    JreProbeResult.WrongVersion(javaMajor, info.major)
+                info.bits == JreVersionInfo.Bits.BITS_32 -> JreProbeResult.Not64Bit
+                // 设计决策：位宽不明确即视为风险（宁可重下，不可误启动）
+                info.bits == JreVersionInfo.Bits.UNKNOWN -> JreProbeResult.Not64Bit
+                info.vm != JreVersionInfo.VmType.SERVER -> JreProbeResult.NoServerCompiler
+                result.exitCode != 0 -> JreProbeResult.ExecFailed("exit_${result.exitCode}", result.output.take(200))
+                else -> JreProbeResult.Ok(info)
+            }
+        }
+
+        // exec 不可用 → 静态判定兜底（真机主路径）
         return when {
-            info.major != javaMajor && !(atLeast && info.major > javaMajor) ->
-                JreProbeResult.WrongVersion(javaMajor, info.major)
-            info.bits == JreVersionInfo.Bits.BITS_32 -> JreProbeResult.Not64Bit
-            // 设计决策：位宽不明确即视为风险（宁可重下，不可误启动）
-            info.bits == JreVersionInfo.Bits.UNKNOWN -> JreProbeResult.Not64Bit
-            info.vm != JreVersionInfo.VmType.SERVER -> JreProbeResult.NoServerCompiler
-            result.exitCode != 0 -> JreProbeResult.ExecFailed("exit_${result.exitCode}", result.output.take(200))
-            else -> JreProbeResult.Ok(info)
+            releaseMajor == null -> JreProbeResult.ExecFailed(
+                "release_unparsed",
+                "release 文件无 JAVA_VERSION 行且 exec 不可用",
+            )
+            releaseMajor == javaMajor || (atLeast && releaseMajor > javaMajor) ->
+                JreProbeResult.Ok(
+                    JreVersionInfo(
+                        major = releaseMajor,
+                        bits = JreVersionInfo.Bits.UNKNOWN,
+                        vm = JreVersionInfo.VmType.UNKNOWN,
+                    )
+                )
+            else -> JreProbeResult.WrongVersion(javaMajor, releaseMajor)
+        }
+    }
+
+    /** release 文件静态版本解析：`JAVA_VERSION="22.0.1"` → 22；遗留 `1.8.0_292` → 8。 */
+    private fun readReleaseMajor(file: File): Int? {
+        if (!file.isFile) return null
+        return try {
+            file.readLines().firstOrNull { it.trimStart().startsWith("JAVA_VERSION") }
+                ?.substringAfter('"')
+                ?.substringBefore('"')
+                ?.let { raw ->
+                    val parts: List<String> = raw.split('.')
+                    val first: Int = parts.firstOrNull()?.toIntOrNull() ?: return@let null
+                    if (first == 1) parts.getOrNull(1)?.toIntOrNull() else first
+                }
+        } catch (t: Throwable) {
+            null
         }
     }
 
