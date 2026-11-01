@@ -15,7 +15,9 @@ import org.aclpe.core.account.store.FileAccountStore
 import org.aclpe.core.download.install.JreInstaller
 import org.aclpe.core.download.net.DownloadManager
 import org.aclpe.core.download.sched.DownloadSchedulerImpl
+import org.aclpe.core.env.bootstrap.DownloadScheduler
 import org.aclpe.core.env.bootstrap.EnvBootstrap
+import org.aclpe.core.env.bootstrap.EnvDownloadSpec
 import org.aclpe.core.env.bootstrap.EnvDownloadTask
 import org.aclpe.core.env.probe.EnvLayout
 import org.aclpe.core.env.probe.EnvProbe
@@ -52,13 +54,26 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
             .build()
     )
 
-    val scheduler: DownloadSchedulerImpl = DownloadSchedulerImpl(
-        manager = manager,
-        taskDao = LauncherDatabase.get(context).downloadTaskDao(),
+    val scheduler: DownloadScheduler = AssetFirstScheduler(
+        delegate = DownloadSchedulerImpl(
+            manager = manager,
+            taskDao = LauncherDatabase.get(context).downloadTaskDao(),
+            scope = appScope,
+            downloadTmpDir = layout.downloadsTmp,
+            networkPolicy = wifiPolicy(context, appSettings),
+            onSucceeded = { task: EnvDownloadTask, file: File -> installJre(task, file) },
+        ),
         scope = appScope,
-        downloadTmpDir = layout.downloadsTmp,
-        networkPolicy = wifiPolicy(context, appSettings),
-        onSucceeded = { task: EnvDownloadTask, file: File -> installJre(task, file) },
+        assetSource = AssetJreCache(context)::fileFor,
+        installer = { component: String, file: File ->
+            val spec: EnvDownloadSpec? = JreManifest.specs()[component]
+            if (spec != null) {
+                installJre(
+                    EnvDownloadTask(component = component, url = "", sha256 = spec.sha256, sizeBytes = spec.sizeBytes),
+                    file,
+                )
+            }
+        },
     )
 
     val bootstrap: EnvBootstrap = EnvBootstrap(probe, scheduler, store, layout)

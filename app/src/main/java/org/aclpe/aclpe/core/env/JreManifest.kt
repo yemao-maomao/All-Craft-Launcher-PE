@@ -47,4 +47,14 @@ object JreManifest {
 
     /** atLeast 语义的槽位集合（Java 17+/21+ 槽位分别装 JRE22/25）。 */
     val atLeastMajors: Set<Int> = setOf(17, 21)
+
+    /**
+     * 内置 APK 资产名（参考 FCL：运行时打进 APK，环境补齐不走网络、秒级安装）。
+     * 资产缺失时（未执行 fetch-jre-assets 的源码构建）自动回退网络下载，双路径都可用。
+     */
+    fun assetNameFor(component: String): String? = when (component) {
+        EnvItemEntity.jre(17) -> "jre22-arm64.tar.xz"
+        EnvItemEntity.jre(21) -> "jre25-arm64.tar.xz"
+        else -> null
+    }
 }

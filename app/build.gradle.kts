@@ -24,6 +24,12 @@ android {
         }
     }
 
+    // 内置 JRE 资产（app/src/main/assets/runtimes/*.tar.xz）原样存储不二次压缩：
+    // 体积与流式读取友好（参考 FCL：运行时打进 APK，环境补齐不走网络）。
+    androidResources {
+        noCompress += "xz"
+    }
+
     buildTypes {
         debug {
             // 调试构建不做混淆
@@ -95,4 +101,5 @@ dependencies {
     implementation(libs.okhttp)   // EnvDependencies 显式构造 OkHttpClient
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
