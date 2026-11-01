@@ -55,10 +55,15 @@ app/.../core/env/{EnvDependencies,JreManifest}.kt # 真实链路装配 + 内置 
 
 ## 5. 已知问题
 
-1. **JRE21 槽位方案 B 已落地（2026-11-01 用户确认）**：组件键 jre:21 实际安装社区 JRE25（mcddos 直链，本机实测 sha256 `94BCC9C6…E9C4C2` pin）；探测用 atLeast 语义（EnvScope.jreAtLeastMajors）；风险（http、无日期文件名、内容可被替换）由 sha256 pin 兜底（替换即校验失败拒装）。若将来获得官方 JRE21 只需替换 JreManifest 常量。
-2. **双轨验证状态**：1.21.x 轨（JRE25）端到端真实通过（下载→校验→安装→标记→atLeast 探测）；1.20.1 轨（JRE17）真实下载+sha256 校验+安装冒烟已多轮实证，最终断言因本机 GitHub 断连未跑完（环境网络，非代码），链路各环均有单测覆盖。
+1. **JRE 双槽位全部走国内镜像（提速整合，2026-11-01 用户反馈默认下载慢后实测决策）**：
+   - 17+ 槽位（jre:17）→ 社区 JRE22（mcddos，sha256 `96C5A2A5…B9DB7` pin，Java 22 兼容 Java 17 字节码）；
+   - 21+ 槽位（jre:21）→ 社区 JRE25（mcddos，sha256 `94BCC9C6…E9C4C2` pin）；
+   - 实测依据：GitHub 直连与 ghfast/ghproxy.net/mirror.ghproxy/ghps/gh.ddlc/kkgithub 等代理均超时/404/429/错误页；
+     mcddos 实测 1.6MB/s+ 且 Range 支持正常；双轨探针（真实下载+校验+安装+atLeast 探测）全部通过；
+   - 探测 atLeast 语义（EnvScope.jreAtLeastMajors={17,21}）；风险（http、无日期文件名）由 sha256 pin 兜底。
+2. **双轨验证状态**：两槽位（JRE22→17 槽、JRE25→21 槽）端到端真实通过（下载→sha256 校验→原子安装→就绪标记→atLeast 探测）。
 3. Gitee 镜像未启用（无稳定端点）。
-4. 网络探针测试依赖本机网络（默认跳过，`ACLPE_NETWORK=true` 开启）。
+4. 网络探针测试依赖本机网络（默认跳过，`ACLPE_NETWORK=true` 开启；需停 Gradle daemon 使环境变量生效）。
 5. 分片并发仅用于全新下载；断点续传走单流（设计文档已注明取舍）。
 6. 下载恢复依赖 Room 任务状态 + .part 文件；任务被 cancel 后 .part 删除。
 7. 符号链接目标若在归档外/缺失则跳过（冒烟与探测兜底判损坏重下）。

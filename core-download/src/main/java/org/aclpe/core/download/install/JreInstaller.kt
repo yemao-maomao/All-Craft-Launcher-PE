@@ -10,6 +10,22 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 
+/** Windows 杀软扫描会瞬态占用目录句柄：rename 重试最多 [attempts] 次（每次 100ms）。 */
+private fun renameWithRetry(from: File, to: File, attempts: Int = 3): Boolean {
+    repeat(attempts) { i ->
+        if (from.renameTo(to)) return true
+        if (i < attempts - 1) {
+            try {
+                Thread.sleep(100L)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+    }
+    return false
+}
+
 /**
  * tar.xz 解压：XZ → tar → 文件，带 zip-slip 防护与顶层目录剥离（Pojav 构建 tar 内含顶层目录）。
  */
@@ -64,6 +80,21 @@ object TarXzExtractor {
         AppResult.Err(AppError.Io("extract_failed", cause = t))
     }
 
+    private fun renameWithRetry(from: File, to: File, attempts: Int = 3): Boolean {
+        repeat(attempts) { i ->
+            if (from.renameTo(to)) return true
+            if (i < attempts - 1) {
+                try {
+                    Thread.sleep(100L)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+        }
+        return false
+    }
+
     /** 链接路径相对其父目录解析目标；越出根目录或仍含 .. 则拒绝。 */
     private fun normalizeWithinRoot(linkPath: String, rawTarget: String): String? {
         val parent: String = linkPath.substringBeforeLast('/', "")
@@ -111,14 +142,15 @@ object JreInstaller {
             return AppResult.Err(AppError.Env("jre_smoke_failed", "解压后关键文件缺失"))
         }
 
-        // 原子替换：target → backup；staging → target；失败回滚
+        // 原子替换：target → backup；staging → target；失败回滚。
+        // Windows 杀软扫描会瞬态占用目录句柄，rename 重试最多 3 次（每次 100ms）。
         val backup: File = File(parent, "arm64.old-${System.currentTimeMillis()}")
-        if (target.exists() && !target.renameTo(backup)) {
+        if (target.exists() && !renameWithRetry(target, backup)) {
             staging.deleteRecursively()
             return AppResult.Err(AppError.Io("swap_failed", "旧目录移出失败"))
         }
-        if (!staging.renameTo(target)) {
-            if (backup.exists()) backup.renameTo(target)   // 回滚
+        if (!renameWithRetry(staging, target)) {
+            if (backup.exists()) renameWithRetry(backup, target)   // 回滚
             return AppResult.Err(AppError.Io("swap_failed", "staging 就位失败"))
         }
         backup.deleteRecursively()
