@@ -22,8 +22,14 @@ echo [1/3] syncing sources to mirror...
 robocopy "D:\mc1" "%MIRROR%" /MIR /XD .git build .gradle .kotlin acl-recovery dist /XF *.log /NFL /NDL /NJH /NJS /NP
 if errorlevel 8 goto :fail
 
-echo [2/3] building in mirror (unit tests + debug APK)...
+echo [2/3] building in mirror (clean, then unit tests + debug APK)...
 cd /d "%MIRROR%"
+REM :app:clean is mandatory: Gradle daemon VFS does not always notice robocopy's
+REM external deletions, which produced stale APKs (assets removed but APK unchanged).
+REM Clean must run in its OWN invocation: mixing it with tests in one call can
+REM race (clean deletes app/build while test tasks write into it).
+call gradlew.bat :app:clean --console=plain
+if errorlevel 1 goto :fail
 call gradlew.bat testDebugUnitTest :app:assembleDebug --console=plain
 if errorlevel 1 goto :fail
 
