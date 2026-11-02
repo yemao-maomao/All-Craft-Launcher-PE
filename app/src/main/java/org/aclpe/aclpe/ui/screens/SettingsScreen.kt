@@ -166,6 +166,52 @@ fun SettingsScreen(
             )
         }
 
+        // ---- 下载与镜像（2026-11-02 新增：切换后下载立即使用所选镜像） ----
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = stringResource(R.string.settings_section_mirror),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_origin_mirror),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("OFFICIAL" to "官方源（慢）", "BMCLAPI" to "BMCLAPI 镜像（推荐）").forEach { (id, label) ->
+                FilterChip(
+                    selected = gameSettingsState.launcher.mirrorId == id,
+                    onClick = { gameSettingsViewModel.setOriginMirror(id) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_origin_mirror_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.settings_community_mirror),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("OFFICIAL" to "Modrinth 官方", "MCIMIRROR" to "MCMirror 镜像").forEach { (id, label) ->
+                FilterChip(
+                    selected = gameSettingsState.launcher.communityMirrorId == id,
+                    onClick = { gameSettingsViewModel.setCommunityMirror(id) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_community_mirror_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = stringResource(R.string.settings_section_account),

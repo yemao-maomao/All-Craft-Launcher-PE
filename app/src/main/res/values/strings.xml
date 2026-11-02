@@ -57,6 +57,23 @@
     <string name="community_empty_hint">输入关键词开始搜索；下载安装将随版本安装流水线接入。</string>
     <string name="community_error">请求失败：%1$s</string>
     <string name="community_back">返回列表</string>
+    <string name="community_tab_mods">模组</string>
+    <string name="community_tab_loaders">模组加载器</string>
+    <string name="community_target_label">安装到（模组文件落点）</string>
+    <string name="community_target_global">全局 mods</string>
+    <string name="community_install_mod">安装</string>
+    <string name="community_loader_hint">为已有版本添加模组加载器（Fabric/Quilt 采用元数据拼接，无需运行安装器）。Forge/NeoForge 需官方安装器，暂不支持。</string>
+    <string name="community_loader_parent">选择父版本（已安装）</string>
+    <string name="community_loader_no_versions">尚无已安装版本：请先到「版本」页安装一个版本</string>
+    <string name="community_loader_kind">加载器类型</string>
+    <string name="community_loader_pick">先选择父版本以加载可用加载器版本</string>
+
+    <!-- 设置页：下载与镜像 -->
+    <string name="settings_section_mirror">下载与镜像</string>
+    <string name="settings_origin_mirror">原版下载镜像</string>
+    <string name="settings_origin_mirror_desc">影响版本安装（清单/客户端/库/资源）与模组加载器元数据；切换后立即生效。</string>
+    <string name="settings_community_mirror">社区资源镜像</string>
+    <string name="settings_community_mirror_desc">影响 Modrinth 搜索与版本列表（MCMirror 反代国内更快）；模组文件本身仍走 Modrinth CDN（实测该镜像不反代）。</string>
 
     <!-- 设置页 -->
     <string name="settings_section_launcher">启动器</string>

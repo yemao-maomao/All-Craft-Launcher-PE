@@ -20,10 +20,17 @@ import org.aclpe.core.common.result.AppResult
 class ModrinthClient(
     private val client: OkHttpClient,
     private val io: CoroutineDispatcher = Dispatchers.IO,
-    private val baseUrl: String = ModrinthApi.BASE_URL,
+    /**
+     * API 基址来源（2026-11-02 接入设置"社区镜像"）：**每次请求时取一次**，
+     * 用户切换社区镜像后，搜索/版本列表直接走所选镜像（MCMirror：`mod.mcimirror.top/modrinth/v2`）。
+     * 文件下载（cdn.modrinth.com）实测该镜像不反代，仍走官方——UI 有说明。
+     */
+    private val baseUrlProvider: suspend () -> String = { ModrinthApi.BASE_URL },
 ) {
 
     private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    private suspend fun base(): String = baseUrlProvider().ifBlank { ModrinthApi.BASE_URL }
 
     /**
      * 搜索项目：[query] 关键词；[gameVersion] 如 "1.20.1"；[loader] 如 "fabric"。
@@ -36,7 +43,7 @@ class ModrinthClient(
         offset: Int = 0,
         limit: Int = 20,
     ): AppResult<ModrinthSearchResult> {
-        val urlBuilder: okhttp3.HttpUrl.Builder = "$baseUrl/search".toHttpUrl().newBuilder()
+        val urlBuilder: okhttp3.HttpUrl.Builder = "${base()}/search".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", limit.toString())
@@ -57,7 +64,7 @@ class ModrinthClient(
         loader: String? = null,
     ): AppResult<ModrinthVersionsResponse> {
         val urlBuilder: okhttp3.HttpUrl.Builder =
-            "$baseUrl/project/$projectIdOrSlug/version".toHttpUrl().newBuilder()
+            "${base()}/project/$projectIdOrSlug/version".toHttpUrl().newBuilder()
         if (gameVersion != null) urlBuilder.addQueryParameter("game_versions", "[\"$gameVersion\"]")
         if (loader != null) urlBuilder.addQueryParameter("loaders", "[\"$loader\"]")
         return get(urlBuilder.build(), ModrinthVersionsResponse.serializer())

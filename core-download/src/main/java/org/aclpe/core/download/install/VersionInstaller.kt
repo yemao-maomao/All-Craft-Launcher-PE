@@ -37,13 +37,16 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipInputStream
 
 /**
- * 版本安装流水线（V0.0.3 接入，FCL 式线性流程——无状态机，完成后状态直达 UI）：
+ * 版本安装流水线（FCL 式线性流程——无状态机，完成后状态直达 UI）：
  *
  * manifest → 版本 json → client.jar → libraries（含 natives jar）→ natives 解压 →
  * assets 索引 → assets 对象（并发 8）→ [onInstalled] 回调（app 写 versions 表 installed=true）。
  *
+ * **镜像（2026-11-02 接入设置）**：[originMirror] 在**每次安装开始时取一次**，
+ * 用户在设置中切换镜像（官方/BMCLAPI）后，后续下载（清单、json、jar、库、资源）全部直接使用所选镜像；
+ * 主镜像失败时按 [MirrorRegistry.originMirrors] 顺序回退其余镜像（含官方）。
+ *
  * 断点续装：每个文件「存在且尺寸符合」即跳过（进程重启后重跑 install 续传）。
- * 镜像：主 BMCLAPI（国内快）回退官方；sha1 全程校验（DownloadManager）。
  * 进度：[states] StateFlow<InstallState>（phase + 文件计数 + 字节），UI 直接订阅。
  */
 class VersionInstaller(
@@ -51,6 +54,8 @@ class VersionInstaller(
     private val manager: DownloadManager,
     private val scope: CoroutineScope,
     private val platformContext: PlatformContext = PlatformContext.fromOsSpec(),
+    /** 下载镜像来源（设置项）：每次安装开始时取一次。 */
+    private val originMirror: suspend () -> MirrorId = { MirrorId.OFFICIAL },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
@@ -72,16 +77,24 @@ class VersionInstaller(
 
     private val jobs: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
 
-    /** 拉取版本清单（BMCLAPI 优先，官方回退）。 */
+    /** 拉取版本清单：主用所选镜像，失败按其他可用镜像回退。 */
     suspend fun loadManifest(): AppResult<VersionManifestV2> {
-        val primary: String = MirrorRegistry.rewrite(MANIFEST_URL, MirrorId.BMCLAPI)
-        val text: String = fetchText(primary).getOrNull()
-            ?: fetchText(MANIFEST_URL).getOrNull()
-            ?: return AppResult.Err(AppError.Network("manifest_failed"))
-        return VersionJsonParser.parseManifestV2(text)
+        val preferred: MirrorId = originMirror()
+        val candidates: List<String> = (listOf(preferred) + MirrorRegistry.originMirrors().map { it.id })
+            .distinct()
+            .map { MirrorRegistry.rewrite(MANIFEST_URL, it) }
+            .distinct()
+        for (url in candidates) {
+            val text: String? = fetchText(url).getOrNull()
+            if (text != null) {
+                val parsed: AppResult<VersionManifestV2> = VersionJsonParser.parseManifestV2(text)
+                if (parsed.isOk) return parsed
+            }
+        }
+        return AppResult.Err(AppError.Network("manifest_failed"))
     }
 
-    /** 启动安装（幂等：在途/已完成的重复调用被忽略）。完成后回调 [onInstalled]（VersionJson 含 javaVersion/assetIndex）。 */
+    /** 启动安装（幂等：在途/已完成的重复调用被忽略）。 */
     fun install(
         manifestVersion: ManifestVersion,
         gameDir: File,
@@ -94,21 +107,25 @@ class VersionInstaller(
             var state: InstallState = InstallState(id, Phase.JSON)
             _states.update { it + (id to state) }
             try {
+                // 安装开始即锁定镜像（用户此刻的选择作用于整个安装过程）
+                val mirror: MirrorId = originMirror()
+                Timber.i("version install start: %s mirror=%s", id, mirror)
+
                 // 1. 版本 json
-                val versionJson: VersionJson = downloadVersionJson(manifestVersion, gameDir)
+                val versionJson: VersionJson = downloadVersionJson(manifestVersion, gameDir, mirror)
 
                 // 2. client.jar
                 state = state.copy(phase = Phase.CLIENT)
                 _states.update { it + (id to state) }
-                downloadClientJar(versionJson, gameDir) { p: DownloadProgress ->
+                downloadClientJar(versionJson, gameDir, mirror) { p: DownloadProgress ->
                     _states.update {
                         it + (id to state.copy(bytesDone = p.downloadedBytes, bytesTotal = p.totalBytes ?: 0L))
                     }
                 }
 
                 // 3. libraries（classpath + natives jar）
-                val libs = LibraryResolver.resolve(versionJson.libraries, platformContext, MirrorId.BMCLAPI)
-                val natives = LibraryResolver.resolveNatives(versionJson.libraries, platformContext, MirrorId.BMCLAPI)
+                val libs = LibraryResolver.resolve(versionJson.libraries, platformContext, mirror)
+                val natives = LibraryResolver.resolveNatives(versionJson.libraries, platformContext, mirror)
                 val allLibs: List<Pair<String, String>> = buildList {
                     libs.forEach { add(it.artifact.path!! to it.url) }
                     natives.forEach { add(it.artifact.path!! to it.url) }
@@ -127,14 +144,14 @@ class VersionInstaller(
                 // 5. assets 索引
                 state = state.copy(phase = Phase.ASSET_INDEX)
                 _states.update { it + (id to state) }
-                val indexText: String = downloadAssetIndex(versionJson, gameDir)
+                val indexText: String = downloadAssetIndex(versionJson, gameDir, mirror)
                 val index: AssetsIndex = AssetsResolver.parseIndex(indexText)
                     .let { r -> r.getOrNull() ?: throw IllegalStateException("assets_index_parse") }
 
                 // 6. assets 对象（并发，逐文件 sha1 校验在 DownloadManager）
                 state = state.copy(phase = Phase.ASSETS, filesDone = 0, filesTotal = index.objects.size)
                 _states.update { it + (id to state) }
-                downloadAssets(index, File(gameDir, "assets/objects")) { done: Int, bytes: Long ->
+                downloadAssets(index, File(gameDir, "assets/objects"), mirror) { done: Int, bytes: Long ->
                     _states.update { it + (id to state.copy(filesDone = done, bytesDone = bytes) ) }
                 }
 
@@ -155,15 +172,15 @@ class VersionInstaller(
 
     // ---- 步骤实现 ----
 
-    private suspend fun downloadVersionJson(manifestVersion: ManifestVersion, gameDir: File): VersionJson {
+    private suspend fun downloadVersionJson(manifestVersion: ManifestVersion, gameDir: File, mirror: MirrorId): VersionJson {
         val dir: File = File(gameDir, "versions/${manifestVersion.id}")
         dir.mkdirs()
         val file: File = File(dir, "${manifestVersion.id}.json")
         if (!file.isFile) {
             downloadToTemp(
                 id = "json:${manifestVersion.id}",
-                url = MirrorRegistry.rewrite(manifestVersion.url, MirrorId.BMCLAPI),
-                fallbackUrl = manifestVersion.url,
+                url = MirrorRegistry.rewrite(manifestVersion.url, mirror),
+                fallbacks = fallbackUrls(manifestVersion.url, mirror),
                 dest = file,
                 sha1 = manifestVersion.sha1,
             )
@@ -173,21 +190,26 @@ class VersionInstaller(
             ?: throw IllegalStateException("version_json_parse")
     }
 
-    private suspend fun downloadClientJar(versionJson: VersionJson, gameDir: File, onProgress: (DownloadProgress) -> Unit) {
-        val client = versionJson.downloads?.client ?: return
-        val url: String = client.url ?: return
+    private suspend fun downloadClientJar(
+        versionJson: VersionJson,
+        gameDir: File,
+        mirror: MirrorId,
+        onProgress: (DownloadProgress) -> Unit,
+    ) {
+        val clientArtifact = versionJson.downloads?.client ?: return
+        val url: String = clientArtifact.url ?: return
         val dir: File = File(gameDir, "versions/${versionJson.id}")
         dir.mkdirs()
         val file: File = File(dir, "${versionJson.id}.jar")
-        if (file.isFile && file.length() == client.size) return   // 断点续装
+        if (file.isFile && file.length() == clientArtifact.size) return   // 断点续装
         val result: AppResult<File> = manager.download(
             DownloadRequest(
                 id = "client:${versionJson.id}",
-                url = MirrorRegistry.rewrite(url, MirrorId.BMCLAPI),
-                mirrorUrls = listOf(url),
+                url = MirrorRegistry.rewrite(url, mirror),
+                mirrorUrls = fallbackUrls(url, mirror),
                 destFile = file,
-                sha1 = client.sha1,
-                sizeBytes = client.size,
+                sha1 = clientArtifact.sha1,
+                sizeBytes = clientArtifact.size,
                 onProgress = onProgress,
             )
         )
@@ -205,8 +227,16 @@ class VersionInstaller(
             launch {
                 semaphore.withPermit {
                     val dest: File = File(baseDir, path)
-                    if (dest.isFile && dest.length() > 0L) return@withPermit   // 断点续装（sha1 来源清单）
-                    downloadToTemp(id = "lib:$path", url = url, fallbackUrl = officialLibraryUrl(path), dest = dest, sha1 = null)
+                    if (dest.isFile && dest.length() > 0L) return@withPermit   // 断点续装
+                    // url 已经镜像重写；回退链补官方（镜像缺件时）
+                    manager.download(
+                        DownloadRequest(
+                            id = "lib:$path",
+                            url = url,
+                            mirrorUrls = if (url != officialLibraryUrl(path)) listOf(officialLibraryUrl(path)) else emptyList(),
+                            destFile = dest,
+                        )
+                    ).getOrNull() ?: throw IllegalStateException("library_download")
                 }
                 done++
                 onFilesDone(done)
@@ -217,6 +247,7 @@ class VersionInstaller(
     private suspend fun downloadAssets(
         index: AssetsIndex,
         objectsDir: File,
+        mirror: MirrorId,
         onProgress: (Int, Long) -> Unit,
     ) = coroutineScope {
         var done: Int = 0
@@ -229,12 +260,12 @@ class VersionInstaller(
                     val prefix: String = obj.hash.take(2)
                     val dest: File = File(objectsDir, "$prefix/${obj.hash}")
                     if (dest.isFile && dest.length() == obj.size) return@withPermit
-                    val url: String = AssetsResolver.objectUrl(obj.hash, MirrorId.BMCLAPI)
+                    val url: String = AssetsResolver.objectUrl(obj.hash, mirror)
                     val result: AppResult<File> = manager.download(
                         DownloadRequest(
                             id = "asset:$name",
                             url = url,
-                            mirrorUrls = listOf(AssetsResolver.objectUrl(obj.hash, MirrorId.OFFICIAL)),
+                            mirrorUrls = fallbackUrls(AssetsResolver.objectUrl(obj.hash, MirrorId.OFFICIAL), mirror),
                             destFile = dest,
                             sha1 = obj.hash,
                             sizeBytes = obj.size,
@@ -251,7 +282,7 @@ class VersionInstaller(
         }.forEach { it.join() }
     }
 
-    private suspend fun downloadAssetIndex(versionJson: VersionJson, gameDir: File): String {
+    private suspend fun downloadAssetIndex(versionJson: VersionJson, gameDir: File, mirror: MirrorId): String {
         val ref = versionJson.assetIndex ?: throw IllegalStateException("no_asset_index")
         val dir: File = File(gameDir, "assets/indexes")
         dir.mkdirs()
@@ -259,8 +290,8 @@ class VersionInstaller(
         if (!file.isFile) {
             downloadToTemp(
                 id = "index:${ref.id}",
-                url = MirrorRegistry.rewrite(ref.url, MirrorId.BMCLAPI),
-                fallbackUrl = ref.url,
+                url = MirrorRegistry.rewrite(ref.url, mirror),
+                fallbacks = fallbackUrls(ref.url, mirror),
                 dest = file,
                 sha1 = ref.sha1,
             )
@@ -290,19 +321,33 @@ class VersionInstaller(
         }
     }
 
-    /** 通用：主镜像下载，失败回退官方（DownloadManager.mirrorUrls 轮换）。 */
-    private suspend fun downloadToTemp(id: String, url: String, fallbackUrl: String?, dest: File, sha1: String?) {
+    /** 通用：主镜像下载 + 其余可用镜像回退（DownloadManager 内部轮换）。 */
+    private suspend fun downloadToTemp(
+        id: String,
+        url: String,
+        fallbacks: List<String>,
+        dest: File,
+        sha1: String?,
+    ) {
         val result: AppResult<File> = manager.download(
             DownloadRequest(
                 id = id,
                 url = url,
-                mirrorUrls = if (fallbackUrl != null && fallbackUrl != url) listOf(fallbackUrl) else emptyList(),
+                mirrorUrls = fallbacks,
                 destFile = dest,
                 sha1 = sha1,
             )
         )
         result.getOrNull() ?: throw IllegalStateException("download_failed")
     }
+
+    /** 回退链：其余已启用镜像重写后的地址（去重、排除主地址本身）。 */
+    private fun fallbackUrls(originalUrl: String, primary: MirrorId): List<String> =
+        MirrorRegistry.originMirrors().map { it.id }
+            .filter { it != primary }
+            .map { MirrorRegistry.rewrite(originalUrl, it) }
+            .distinct()
+            .filter { it != MirrorRegistry.rewrite(originalUrl, primary) }
 
     private fun officialLibraryUrl(path: String): String = "https://libraries.minecraft.net/$path"
 
@@ -326,7 +371,7 @@ class VersionInstaller(
 
     companion object {
         const val MANIFEST_URL: String = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-        const val UA: String = "ACL-PE/0.0.4 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
+        const val UA: String = "ACL-PE/0.0.5 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
         const val LIBRARY_CONCURRENCY: Int = 4
         const val ASSET_CONCURRENCY: Int = 8
     }

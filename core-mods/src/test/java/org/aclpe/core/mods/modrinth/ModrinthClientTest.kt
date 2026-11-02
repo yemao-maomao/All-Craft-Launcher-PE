@@ -21,7 +21,7 @@ class ModrinthClientTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        api = ModrinthClient(OkHttpClient(), baseUrl = server.url("/v2").toString())
+        api = ModrinthClient(OkHttpClient(), baseUrlProvider = { server.url("/v2").toString() })
     }
 
     @After

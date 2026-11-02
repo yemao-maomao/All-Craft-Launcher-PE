@@ -83,6 +83,29 @@ class GameSettingsViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /** 保存：options.txt 先备份再原子写（游戏运行中拒绝），启动器配置 JSON 同步写。 */
+    /** 切换原版下载镜像：**立即落盘**（用户预期：换镜像后马上生效，不等"保存"）。 */
+    fun setOriginMirror(mirrorId: String) {
+        applyLauncherImmediately(_uiState.value.launcher.copy(mirrorId = mirrorId), "下载镜像已切换：$mirrorId（后续版本安装直接使用）")
+    }
+
+    /** 切换社区资源镜像：**立即落盘**。 */
+    fun setCommunityMirror(mirrorId: String) {
+        applyLauncherImmediately(_uiState.value.launcher.copy(communityMirrorId = mirrorId), "社区镜像已切换：$mirrorId")
+    }
+
+    private fun applyLauncherImmediately(settings: LauncherSettings, message: String) {
+        val validated: LauncherSettings? = LauncherSettingsValidator.validate(settings)
+        if (validated == null) {
+            _message.value = "镜像设置非法"
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = stores.writeLauncher(PROFILE_ID, validated)
+            _uiState.value = _uiState.value.copy(launcher = validated, dirty = false)
+            _message.value = if (result.isOk) message else "镜像保存失败：${result.errorOrNull()?.code}"
+        }
+    }
+
     fun save() {
         viewModelScope.launch(Dispatchers.IO) {
             val current: UiState = _uiState.value

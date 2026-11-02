@@ -93,16 +93,45 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     val runtimeInstaller: SimpleRuntimeInstaller =
         SimpleRuntimeInstaller.create(context, appScope)
 
-    /** 社区资源（Modrinth）客户端：与下载共享 OkHttp 实例。 */
-    val modrinthClient: org.aclpe.core.mods.modrinth.ModrinthClient =
-        org.aclpe.core.mods.modrinth.ModrinthClient(httpClient)
+    /** 原版下载镜像（设置项 → 每次安装开始时取一次）：切换后版本下载立即使用所选镜像。 */
+    private val originMirrorProvider: suspend () -> org.aclpe.core.download.mirror.MirrorId = {
+        org.aclpe.core.download.mirror.MirrorRegistry.fromName(
+            settingsStores.readLauncher(PROFILE_ID).mirrorId
+        )
+    }
 
-    /** 版本安装流水线（V0.0.3 接入）：manifest → json → jar → 库 → natives → assets → installed。 */
+    /** 社区资源镜像（设置项 → 每次请求时取一次）：切换后社区搜索立即使用所选镜像。 */
+    private val communityMirrorProvider: suspend () -> String = {
+        val mirror: org.aclpe.core.download.mirror.MirrorId =
+            org.aclpe.core.download.mirror.MirrorRegistry.fromName(
+                settingsStores.readLauncher(PROFILE_ID).communityMirrorId
+            )
+        org.aclpe.core.download.mirror.MirrorRegistry.modrinthBaseUrl(mirror)
+    }
+
+    /** 社区资源（Modrinth）客户端：与下载共享 OkHttp 实例（基址随"社区镜像"设置动态变化）。 */
+    val modrinthClient: org.aclpe.core.mods.modrinth.ModrinthClient =
+        org.aclpe.core.mods.modrinth.ModrinthClient(httpClient, baseUrlProvider = communityMirrorProvider)
+
+    /** 版本安装流水线：manifest → json → jar → 库 → natives → assets → installed（镜像随设置）。 */
     val versionInstaller: org.aclpe.core.download.install.VersionInstaller =
-        org.aclpe.core.download.install.VersionInstaller(httpClient, manager, appScope)
+        org.aclpe.core.download.install.VersionInstaller(
+            httpClient, manager, appScope, originMirror = originMirrorProvider,
+        )
+
+    /** 模组加载器安装（Fabric/Quilt，为已有版本添加；镜像随设置）。 */
+    val modLoaderInstaller: org.aclpe.core.download.loader.ModLoaderInstaller =
+        org.aclpe.core.download.loader.ModLoaderInstaller(
+            httpClient, manager, appScope, originMirror = originMirrorProvider,
+        )
 
     /** 版本安装目录（与启动链路 runtimes/<profileId> 一致）。 */
     val versionsGameDir: File = File(context.filesDir, "runtimes/default")
+
+    /** 组件（模组等）安装根目录：游戏根 mods + 各版本 mods（版本隔离）。 */
+    fun modsDir(versionId: String?): File =
+        if (versionId.isNullOrBlank()) File(versionsGameDir, "mods")
+        else File(versionsGameDir, "versions/$versionId/mods")
 
     // ---- Step 4：账号契约装配（离线账户 + 加密 token 存储 + 皮肤缓存） ----
     val accountRepository: AccountRepository = AccountRepository(
@@ -117,6 +146,11 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     // ---- Step 5：设置存储（Profile 隔离 + 默认模板 + 触控方案） ----
     val settingsStores: org.aclpe.core.settings.store.SettingsStores =
         org.aclpe.core.settings.store.SettingsStores(context.filesDir)
+
+    companion object {
+        /** 骨架期固定 Profile 标识（与 AccountViewModel.PROFILE_ID 一致）。 */
+        const val PROFILE_ID: String = "default"
+    }
 
     /** 游戏运行中禁止覆盖 options.txt（硬性约束）。 */
     val gameRunningCheck: () -> Boolean = { GameProcessRegistry.isRunning }
