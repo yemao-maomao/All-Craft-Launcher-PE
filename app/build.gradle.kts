@@ -15,8 +15,8 @@ android {
         applicationId = "org.aclpe.aclpe"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "0.0.2"
 
         // 硬性约束：arm64 only。32 位设备在安装期即被拒绝（APK ABI 过滤），另有运行时 AbiGuard 兜底。
         ndk {
@@ -85,6 +85,7 @@ dependencies {
     implementation(project(":core-launch"))
     implementation(project(":core-account"))
     implementation(project(":core-settings"))
+    implementation(project(":core-mods"))
 
     // Compose Multiplatform（当前仅 Android 目标；模块边界见 docs/design/step1-skeleton.md）
     implementation(compose.runtime)

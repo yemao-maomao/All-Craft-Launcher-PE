@@ -25,20 +25,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.aclpe.aclpe.R
-import org.aclpe.aclpe.ui.home.EnvUiItem
-import org.aclpe.aclpe.ui.home.EnvUiState
+import org.aclpe.aclpe.core.env.SimpleRuntimeInstaller
 import org.aclpe.aclpe.ui.home.HomeViewModel
-import org.aclpe.core.env.bootstrap.DownloadTaskState
-import org.aclpe.core.env.fsm.EnvItemState
 
 /**
- * 首页：环境卡片（core-env + core-download 驱动，Step 2 交付）。
- * 状态机：缺少 Java 17 →「下载」（真实下载+进度+暂停/继续）→「就绪」；
- * 未就绪时启动按钮置灰（LaunchGate 语义）；无下载规格组件（JRE21 待决策）诚实提示。
+ * 首页：环境卡片（FCL 式线性部署，2026-11-02 重写）。
+ * 每行四态：未安装 / 安装中（进度条）/ ✓ 就绪 / 失败（错误码 + 重试按钮）。
+ * 完成即 READY——不再有「处理中」。
  */
 @Composable
 fun HomeScreen(viewModel: HomeViewModel) {
-    val uiState: EnvUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState: HomeViewModel.EnvUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val launchMessage: String? by viewModel.launchMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -72,37 +69,29 @@ fun HomeScreen(viewModel: HomeViewModel) {
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = statusLabel(uiState),
+                        text = if (uiState.overallReady) {
+                            stringResource(R.string.env_status_ready)
+                        } else {
+                            stringResource(R.string.env_status_missing)
+                        },
                         style = MaterialTheme.typography.labelMedium,
-                        color = statusColor(uiState),
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                uiState.items.forEach { item ->
-                    EnvItemRow(
-                        item = item,
-                        onDownload = { viewModel.download(item.component) },
-                        onPause = { viewModel.pause(item.component) },
-                        onResume = { viewModel.resume(item.component) },
-                        onNoSpec = {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.env_no_spec_hint),
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                        color = if (uiState.overallReady) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                uiState.items.forEach { item: HomeViewModel.EnvUiItem ->
+                    RuntimeRow(item = item, onInstall = { viewModel.install(item.slot) })
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = stringResource(R.string.env_placeholder_rows),
+                    text = stringResource(R.string.env_runtime_note),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { viewModel.refresh() }) {
-                    Text(text = stringResource(R.string.env_refresh))
-                }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -129,13 +118,7 @@ fun HomeScreen(viewModel: HomeViewModel) {
 }
 
 @Composable
-private fun EnvItemRow(
-    item: EnvUiItem,
-    onDownload: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onNoSpec: () -> Unit,
-) {
+private fun RuntimeRow(item: HomeViewModel.EnvUiItem, onInstall: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -149,76 +132,52 @@ private fun EnvItemRow(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = itemStatusLabel(item),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            when {
-                item.task?.state == DownloadTaskState.RUNNING -> TextButton(onClick = onPause) {
-                    Text(text = stringResource(R.string.env_action_pause))
+            when (item.phase) {
+                SimpleRuntimeInstaller.Phase.READY ->
+                    Text(
+                        text = stringResource(R.string.env_status_ready),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                SimpleRuntimeInstaller.Phase.INSTALLING -> {
+                    Text(
+                        text = stringResource(R.string.env_status_installing),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = {}) {
+                        Text(text = stringResource(R.string.env_status_installing))
+                    }
                 }
-                item.task?.state == DownloadTaskState.PAUSED -> TextButton(onClick = onResume) {
-                    Text(text = stringResource(R.string.env_action_resume))
+                SimpleRuntimeInstaller.Phase.FAILED -> {
+                    Text(
+                        text = stringResource(R.string.env_status_failed) +
+                            (item.errorCode?.let { "（$it）" } ?: ""),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    TextButton(onClick = onInstall) {
+                        Text(text = stringResource(R.string.env_action_retry))
+                    }
                 }
-                item.state in ACTIONABLE_STATES -> TextButton(
-                    onClick = if (item.hasSpec) onDownload else onNoSpec
-                ) {
-                    Text(text = stringResource(R.string.env_action_download))
+                SimpleRuntimeInstaller.Phase.NOT_INSTALLED -> {
+                    Text(
+                        text = stringResource(R.string.env_status_missing),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onInstall) {
+                        Text(text = stringResource(R.string.env_action_install))
+                    }
                 }
             }
         }
-        val task = item.task
-        if (task != null && task.state == DownloadTaskState.RUNNING) {
-            val total: Long? = task.totalBytes
-            if (total != null && total > 0L) {
-                val fraction: Float = task.progressBytes.toFloat() / total
-                LinearProgressIndicator(
-                    progress = { fraction.coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                )
-            }
+        if (item.phase == SimpleRuntimeInstaller.Phase.INSTALLING) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+            )
         }
     }
-}
-
-private val ACTIONABLE_STATES: Set<EnvItemState> = setOf(
-    EnvItemState.MISSING, EnvItemState.CORRUPTED,
-    EnvItemState.FAILED, EnvItemState.FAILED_PERMANENT,
-)
-
-@Composable
-private fun itemStatusLabel(item: EnvUiItem): String = when {
-    item.task?.state == DownloadTaskState.RUNNING -> stringResource(R.string.env_status_downloading)
-    item.task?.state == DownloadTaskState.PAUSED -> stringResource(R.string.env_status_paused)
-    item.state == EnvItemState.READY -> stringResource(R.string.env_status_ready)
-    item.state == EnvItemState.MISSING && !item.hasSpec -> stringResource(R.string.env_status_spec_pending)
-    item.state == EnvItemState.MISSING -> stringResource(R.string.env_status_missing)
-    item.state == EnvItemState.CORRUPTED -> stringResource(R.string.env_status_corrupted)
-    item.state in setOf(EnvItemState.QUEUED, EnvItemState.VERIFYING, EnvItemState.INSTALLING) ->
-        stringResource(R.string.env_status_busy)
-    item.state in setOf(EnvItemState.FAILED, EnvItemState.FAILED_PERMANENT) ->
-        stringResource(R.string.env_status_failed)
-    else -> stringResource(R.string.env_probing)
-}
-
-@Composable
-private fun statusLabel(uiState: EnvUiState): String = when {
-    uiState.probing -> stringResource(R.string.env_probing)
-    uiState.overallReady -> stringResource(R.string.env_status_ready)
-    uiState.items.any { it.state == EnvItemState.CORRUPTED } -> stringResource(R.string.env_status_corrupted)
-    uiState.items.any { it.task?.state == DownloadTaskState.RUNNING } -> stringResource(R.string.env_status_downloading)
-    uiState.items.any { it.state != null && it.state != EnvItemState.READY } -> stringResource(R.string.env_status_missing)
-    else -> stringResource(R.string.env_probing)
-}
-
-@Composable
-private fun statusColor(uiState: EnvUiState) = when {
-    uiState.probing || uiState.items.any { it.state == null } -> MaterialTheme.colorScheme.onSurfaceVariant
-    uiState.overallReady -> MaterialTheme.colorScheme.primary
-    uiState.items.any { it.state == EnvItemState.CORRUPTED } -> MaterialTheme.colorScheme.error
-    uiState.items.any { it.task?.state == DownloadTaskState.RUNNING } -> MaterialTheme.colorScheme.primary
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

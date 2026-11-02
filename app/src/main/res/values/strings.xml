@@ -5,6 +5,7 @@
     <!-- 底部导航 -->
     <string name="tab_home">首页</string>
     <string name="tab_versions">版本</string>
+    <string name="tab_community">社区</string>
     <string name="tab_settings">设置</string>
     <string name="tab_about">关于</string>
 
@@ -14,26 +15,25 @@
     <string name="home_launch_ready">启动游戏</string>
     <string name="home_launch_gate_hint">未完成环境补齐前不可启动，门禁由 core-env 的 LaunchGate 提供。</string>
 
-    <!-- 环境卡片状态 -->
+    <!-- 环境卡片状态（FCL 式线性部署） -->
     <string name="env_status_ready">✓ 就绪</string>
     <string name="env_status_missing">未安装</string>
-    <string name="env_status_corrupted">损坏</string>
-    <string name="env_status_busy">处理中…</string>
-    <string name="env_status_downloading">下载中…</string>
-    <string name="env_status_paused">已暂停</string>
+    <string name="env_status_installing">安装中…</string>
     <string name="env_status_failed">失败</string>
-    <string name="env_status_spec_pending">下载源待配置</string>
-    <string name="env_probing">检测中…</string>
-    <string name="env_action_download">下载</string>
-    <string name="env_action_pause">暂停</string>
-    <string name="env_action_resume">继续</string>
-    <string name="env_refresh">重新检测</string>
-    <string name="env_step2_pending">下载能力将在 Step 2（core-download）接入</string>
-    <string name="env_no_spec_hint">该组件下载源待配置（JRE21 源决策中）</string>
-    <string name="env_placeholder_rows">natives / assets 索引：未安装版本，无依赖（版本安装后显示）</string>
+    <string name="env_action_install">安装</string>
+    <string name="env_action_retry">重试</string>
+    <string name="env_runtime_note">Java 17+/21+ 槽位实际安装 JRE22/JRE25（社区预构建，打包进 APK，本地秒装）</string>
 
     <!-- 版本页 -->
     <string name="versions_placeholder">版本列表 —— Step 2（core-download）接入后显示 version_manifest_v2 数据与下载安装。</string>
+
+    <!-- 社区资源页（Modrinth） -->
+    <string name="community_search_hint">搜索 Modrinth 模组（如 sodium）</string>
+    <string name="community_search_action">搜索</string>
+    <string name="community_source_note">数据来自 Modrinth（api.modrinth.com），仅显示支持客户端的模组；当前按 1.20.1 过滤。</string>
+    <string name="community_empty_hint">输入关键词开始搜索；下载安装将随版本安装流水线接入。</string>
+    <string name="community_error">请求失败：%1$s</string>
+    <string name="community_back">返回列表</string>
 
     <!-- 设置页 -->
     <string name="settings_section_launcher">启动器</string>

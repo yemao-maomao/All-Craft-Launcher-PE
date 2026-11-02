@@ -10,6 +10,7 @@ import org.aclpe.aclpe.core.AbiGuard
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.core.ThemeMode
 import org.aclpe.aclpe.ui.account.AccountViewModel
+import org.aclpe.aclpe.ui.community.CommunityViewModel
 import org.aclpe.aclpe.ui.home.HomeViewModel
 import org.aclpe.aclpe.ui.nav.AppNavHost
 import org.aclpe.aclpe.ui.settings.GameSettingsViewModel
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val accountViewModel: AccountViewModel by viewModels()
     private val gameSettingsViewModel: GameSettingsViewModel by viewModels()
+    private val communityViewModel: CommunityViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +43,7 @@ class MainActivity : ComponentActivity() {
                     homeViewModel = homeViewModel,
                     accountViewModel = accountViewModel,
                     gameSettingsViewModel = gameSettingsViewModel,
+                    communityViewModel = communityViewModel,
                 )
             }
         }

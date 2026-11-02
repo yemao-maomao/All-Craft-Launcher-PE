@@ -17,8 +17,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.ui.account.AccountViewModel
+import org.aclpe.aclpe.ui.community.CommunityViewModel
 import org.aclpe.aclpe.ui.home.HomeViewModel
 import org.aclpe.aclpe.ui.screens.AboutScreen
+import org.aclpe.aclpe.ui.screens.CommunityScreen
 import org.aclpe.aclpe.ui.screens.HomeScreen
 import org.aclpe.aclpe.ui.screens.SettingsScreen
 import org.aclpe.aclpe.ui.screens.VersionsScreen
@@ -31,6 +33,7 @@ fun AppNavHost(
     homeViewModel: HomeViewModel,
     accountViewModel: AccountViewModel,
     gameSettingsViewModel: GameSettingsViewModel,
+    communityViewModel: CommunityViewModel,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -63,6 +66,7 @@ fun AppNavHost(
         ) {
             composable(Destination.Home.route) { HomeScreen(homeViewModel) }
             composable(Destination.Versions.route) { VersionsScreen() }
+            composable(Destination.Community.route) { CommunityScreen(communityViewModel) }
             composable(Destination.Settings.route) { SettingsScreen(appSettings, accountViewModel, gameSettingsViewModel) }
             composable(Destination.About.route) { AboutScreen() }
         }

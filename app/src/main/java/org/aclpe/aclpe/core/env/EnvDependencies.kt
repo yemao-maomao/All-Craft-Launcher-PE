@@ -89,6 +89,14 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
 
     val bootstrap: EnvBootstrap = EnvBootstrap(probe, scheduler, store, layout)
 
+    /** FCL 式运行时部署（2026-11-02 用户指令重写）：线性流程，完成后状态直达 UI。 */
+    val runtimeInstaller: SimpleRuntimeInstaller =
+        SimpleRuntimeInstaller.create(context, appScope)
+
+    /** 社区资源（Modrinth）客户端：与下载共享 OkHttp 实例。 */
+    val modrinthClient: org.aclpe.core.mods.modrinth.ModrinthClient =
+        org.aclpe.core.mods.modrinth.ModrinthClient(httpClient)
+
     // ---- Step 4：账号契约装配（离线账户 + 加密 token 存储 + 皮肤缓存） ----
     val accountRepository: AccountRepository = AccountRepository(
         store = FileAccountStore.create(context.filesDir) as AccountStore,
