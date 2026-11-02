@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,12 @@ object AppSettingsKeys {
     val THEME_MODE: Preferences.Key<String> = stringPreferencesKey("theme_mode")
     val DOWNLOAD_WIFI_ONLY: Preferences.Key<Boolean> = booleanPreferencesKey("download_wifi_only")
     val DEVELOPER_MODE: Preferences.Key<Boolean> = booleanPreferencesKey("developer_mode")
+
+    /** 已同意的法务文件版本号（与 LegalDocuments.VERSION 比对；不一致 → 强制重新同意）。 */
+    val LEGAL_ACCEPTED_VERSION: Preferences.Key<String> = stringPreferencesKey("legal_accepted_version")
+
+    /** 同意时间戳（本机记录，作为同意事实凭证）。 */
+    val LEGAL_ACCEPTED_AT: Preferences.Key<Long> = longPreferencesKey("legal_accepted_at")
 }
 
 enum class ThemeMode {
@@ -44,6 +51,10 @@ class AppSettings(private val context: Context) {
     val developerMode: Flow<Boolean> =
         context.appSettingsDataStore.data.map { it[AppSettingsKeys.DEVELOPER_MODE] ?: false }
 
+    /** 已同意的法务文件版本号；null 表示从未同意（首次启动）→ 必须弹窗。 */
+    val legalAcceptedVersion: Flow<String?> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.LEGAL_ACCEPTED_VERSION] }
+
     suspend fun setCrashCaptureEnabled(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.CRASH_CAPTURE_ENABLED] = value }
     }
@@ -58,5 +69,13 @@ class AppSettings(private val context: Context) {
 
     suspend fun setDeveloperMode(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.DEVELOPER_MODE] = value }
+    }
+
+    /** 记录同意（两份文件同时同意，故只存一个共同版本号 + 时间戳）。 */
+    suspend fun acceptLegalDocuments(version: String) {
+        context.appSettingsDataStore.edit { prefs ->
+            prefs[AppSettingsKeys.LEGAL_ACCEPTED_VERSION] = version
+            prefs[AppSettingsKeys.LEGAL_ACCEPTED_AT] = System.currentTimeMillis()
+        }
     }
 }

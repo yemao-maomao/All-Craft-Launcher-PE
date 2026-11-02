@@ -326,7 +326,7 @@ class VersionInstaller(
 
     companion object {
         const val MANIFEST_URL: String = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-        const val UA: String = "ACL-PE/0.0.3 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
+        const val UA: String = "ACL-PE/0.0.4 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
         const val LIBRARY_CONCURRENCY: Int = 4
         const val ASSET_CONCURRENCY: Int = 8
     }

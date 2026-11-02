@@ -2,6 +2,19 @@
 <resources>
     <string name="app_name">ACL-PE</string>
 
+    <!-- 法务同意门禁（首次启动强制，用户协议第 1 条） -->
+    <string name="legal_checking">正在检查法务文件同意状态…</string>
+    <string name="legal_title">请阅读并同意以下两份文件</string>
+    <string name="legal_intro">本应用由 %1$s 提供。你必须完整阅读并明确同意《ACL-PE 隐私政策》与《ACL-PE 用户协议》两份文件（当前版本 %2$s）后方可使用；拒绝其中任何一份，启动器将不允许你进入或使用其任何功能。</string>
+    <string name="legal_tab_privacy">隐私政策</string>
+    <string name="legal_tab_agreement">用户协议</string>
+    <string name="legal_agree_privacy">我已完整阅读并同意《%1$s》</string>
+    <string name="legal_agree_agreement">我已完整阅读并同意《%1$s》</string>
+    <string name="legal_hint">两份文件必须同时勾选同意；文件更新后本页会再次弹出要求重新同意。</string>
+    <string name="legal_decline_exit">不同意并退出</string>
+    <string name="legal_accept_continue">同意并继续</string>
+    <string name="legal_contact">联系方式：%1$s</string>
+
     <!-- 底部导航 -->
     <string name="tab_home">首页</string>
     <string name="tab_versions">版本</string>

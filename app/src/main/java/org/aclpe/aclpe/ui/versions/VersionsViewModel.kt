@@ -46,13 +46,17 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
     init {
         loadManifest()
         // 合并：versions 表（installed 标记） + 安装进度流
+        // 修复（2026-11-02 真机「点安装没反应」）：原 collect { } 空 lambda 丢弃了合并结果，
+        // 安装状态永远写不回 _uiState → UI 无任何反应。
         viewModelScope.launch {
-            combine(deps.versionDao.observeAll(), installer.states) { installed: List<VersionEntity>, installing ->
-                _uiState.value.copy(
-                    installedIds = installed.filter { it.installed }.map { it.id }.toSet(),
-                    installing = installing,
-                )
-            }.collect { }
+            combine(
+                deps.versionDao.observeAll(),
+                installer.states,
+            ) { installed: List<VersionEntity>, installing: Map<String, VersionInstaller.InstallState> ->
+                installed.filter { it.installed }.map { it.id }.toSet() to installing
+            }.collect { (installedIds: Set<String>, installing: Map<String, VersionInstaller.InstallState>) ->
+                _uiState.value = _uiState.value.copy(installedIds = installedIds, installing = installing)
+            }
         }
     }
 

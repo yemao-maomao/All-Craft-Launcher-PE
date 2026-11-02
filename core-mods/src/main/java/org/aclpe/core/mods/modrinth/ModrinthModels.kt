@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  */
 object ModrinthApi {
     const val BASE_URL: String = "https://api.modrinth.com/v2"
-    const val USER_AGENT: String = "ACL-PE/0.0.2 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
+    const val USER_AGENT: String = "ACL-PE/0.0.4 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
 }
 
 @Serializable
