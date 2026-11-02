@@ -2,31 +2,180 @@ package org.aclpe.aclpe.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.aclpe.aclpe.R
+import org.aclpe.aclpe.ui.versions.VersionsViewModel
+import org.aclpe.core.download.install.VersionInstaller
+import org.aclpe.core.download.json.ManifestVersion
 
-/** 版本页占位：Step 2（core-download）接入后显示 version_manifest_v2 版本列表与下载安装。 */
+/**
+ * 版本页（V0.0.3：真实版本下载安装接入）：
+ * 清单（BMCLAPI 优先）→ 搜索 → 列表（release）→ 安装（线性流水线，进度/失败直达 UI）。
+ */
 @Composable
-fun VersionsScreen() {
+fun VersionsScreen(viewModel: VersionsViewModel) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = stringResource(R.string.versions_placeholder),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = viewModel::updateQuery,
+            label = { Text(stringResource(R.string.versions_search_hint)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = when {
+                state.loading -> stringResource(R.string.versions_loading)
+                state.error != null -> stringResource(R.string.versions_error, state.error ?: "")
+                state.latestRelease != null -> stringResource(R.string.versions_latest, state.latestRelease ?: "")
+                else -> ""
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (state.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (state.loading) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+            ) { CircularProgressIndicator() }
+            return@Column
+        }
+
+        val list: List<ManifestVersion> = viewModel.filteredVersions()
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(list, key = { it.id }) { version: ManifestVersion ->
+                VersionCard(
+                    version = version,
+                    installed = version.id in state.installedIds,
+                    installState = state.installing[version.id],
+                    onInstall = { viewModel.install(version) },
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun VersionCard(
+    version: ManifestVersion,
+    installed: Boolean,
+    installState: VersionInstaller.InstallState?,
+    onInstall: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = version.id,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                when {
+                    installed -> Text(
+                        text = stringResource(R.string.env_status_ready),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    installState != null && installState.phase != VersionInstaller.Phase.FAILED ->
+                        Text(
+                            text = phaseLabel(installState),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    else -> TextButton(onClick = onInstall) {
+                        Text(stringResource(R.string.env_action_install))
+                    }
+                }
+            }
+            // 安装进度：assets/库阶段显示文件计数，client 阶段显示字节
+            if (installState != null && installState.phase !in setOf(
+                    VersionInstaller.Phase.DONE,
+                    VersionInstaller.Phase.FAILED,
+                    VersionInstaller.Phase.IDLE,
+                )
+            ) {
+                if (installState.filesTotal > 0) {
+                    Text(
+                        text = "${installState.filesDone}/${installState.filesTotal}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinearProgressIndicator(
+                        progress = {
+                            (installState.filesDone.toFloat() / installState.filesTotal).coerceIn(0f, 1f)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                    )
+                } else if (installState.bytesTotal > 0L) {
+                    LinearProgressIndicator(
+                        progress = {
+                            (installState.bytesDone.toFloat() / installState.bytesTotal).coerceIn(0f, 1f)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                    )
+                }
+            }
+            if (installState?.phase == VersionInstaller.Phase.FAILED) {
+                Text(
+                    text = stringResource(R.string.env_status_failed) +
+                        "（${installState.errorCode ?: "?"}）" +
+                        stringResource(R.string.versions_retry_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Button(onClick = onInstall, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(stringResource(R.string.env_action_retry))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun phaseLabel(state: VersionInstaller.InstallState): String = when (state.phase) {
+    VersionInstaller.Phase.JSON -> stringResource(R.string.versions_phase_json)
+    VersionInstaller.Phase.CLIENT -> stringResource(R.string.versions_phase_client)
+    VersionInstaller.Phase.LIBRARIES -> stringResource(R.string.versions_phase_libraries)
+    VersionInstaller.Phase.EXTRACTING -> stringResource(R.string.versions_phase_extracting)
+    VersionInstaller.Phase.ASSET_INDEX -> stringResource(R.string.versions_phase_asset_index)
+    VersionInstaller.Phase.ASSETS -> stringResource(R.string.versions_phase_assets)
+    VersionInstaller.Phase.DONE -> stringResource(R.string.env_status_ready)
+    else -> stringResource(R.string.versions_phase_json)
 }

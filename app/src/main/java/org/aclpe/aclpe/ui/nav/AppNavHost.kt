@@ -25,6 +25,7 @@ import org.aclpe.aclpe.ui.screens.HomeScreen
 import org.aclpe.aclpe.ui.screens.SettingsScreen
 import org.aclpe.aclpe.ui.screens.VersionsScreen
 import org.aclpe.aclpe.ui.settings.GameSettingsViewModel
+import org.aclpe.aclpe.ui.versions.VersionsViewModel
 
 /** 导航宿主：底部导航 + 页面切换（单 Activity 壳）。 */
 @Composable
@@ -34,6 +35,7 @@ fun AppNavHost(
     accountViewModel: AccountViewModel,
     gameSettingsViewModel: GameSettingsViewModel,
     communityViewModel: CommunityViewModel,
+    versionsViewModel: VersionsViewModel,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -65,7 +67,7 @@ fun AppNavHost(
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Destination.Home.route) { HomeScreen(homeViewModel) }
-            composable(Destination.Versions.route) { VersionsScreen() }
+            composable(Destination.Versions.route) { VersionsScreen(versionsViewModel) }
             composable(Destination.Community.route) { CommunityScreen(communityViewModel) }
             composable(Destination.Settings.route) { SettingsScreen(appSettings, accountViewModel, gameSettingsViewModel) }
             composable(Destination.About.route) { AboutScreen() }

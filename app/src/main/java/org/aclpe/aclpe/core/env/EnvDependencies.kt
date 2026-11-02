@@ -97,6 +97,13 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     val modrinthClient: org.aclpe.core.mods.modrinth.ModrinthClient =
         org.aclpe.core.mods.modrinth.ModrinthClient(httpClient)
 
+    /** 版本安装流水线（V0.0.3 接入）：manifest → json → jar → 库 → natives → assets → installed。 */
+    val versionInstaller: org.aclpe.core.download.install.VersionInstaller =
+        org.aclpe.core.download.install.VersionInstaller(httpClient, manager, appScope)
+
+    /** 版本安装目录（与启动链路 runtimes/<profileId> 一致）。 */
+    val versionsGameDir: File = File(context.filesDir, "runtimes/default")
+
     // ---- Step 4：账号契约装配（离线账户 + 加密 token 存储 + 皮肤缓存） ----
     val accountRepository: AccountRepository = AccountRepository(
         store = FileAccountStore.create(context.filesDir) as AccountStore,

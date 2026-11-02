@@ -24,8 +24,18 @@
     <string name="env_action_retry">重试</string>
     <string name="env_runtime_note">Java 17+/21+ 槽位实际安装 JRE22/JRE25（社区预构建，打包进 APK，本地秒装）</string>
 
-    <!-- 版本页 -->
-    <string name="versions_placeholder">版本列表 —— Step 2（core-download）接入后显示 version_manifest_v2 数据与下载安装。</string>
+    <!-- 版本页（V0.0.3 真实接入） -->
+    <string name="versions_search_hint">搜索版本（如 1.20.1）</string>
+    <string name="versions_loading">正在获取版本清单（BMCLAPI 优先）…</string>
+    <string name="versions_error">清单获取失败：%1$s</string>
+    <string name="versions_latest">最新正式版：%1$s</string>
+    <string name="versions_retry_hint">（点重试从头续装）</string>
+    <string name="versions_phase_json">获取版本元数据…</string>
+    <string name="versions_phase_client">下载客户端 jar…</string>
+    <string name="versions_phase_libraries">下载依赖库…</string>
+    <string name="versions_phase_extracting">解压原生库…</string>
+    <string name="versions_phase_asset_index">获取资源索引…</string>
+    <string name="versions_phase_assets">下载资源文件…</string>
 
     <!-- 社区资源页（Modrinth） -->
     <string name="community_search_hint">搜索 Modrinth 模组（如 sodium）</string>
