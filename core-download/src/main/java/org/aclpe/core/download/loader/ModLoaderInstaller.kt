@@ -269,7 +269,9 @@ class ModLoaderInstaller(
     private data class FabricLoaderInfo(val version: String? = null, val stable: Boolean? = null)
 
     companion object {
-        const val UA: String = "ACL-PE/0.0.5 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
-        const val CONCURRENCY: Int = 4
+        const val UA: String = "ACL-PE/0.0.6 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
+
+        /** 加载器库下载并发（2026-11-03 提速：4 → 8，配合 OkHttp maxRequestsPerHost=32）。 */
+        const val CONCURRENCY: Int = 8
     }
 }

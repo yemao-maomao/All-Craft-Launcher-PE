@@ -106,6 +106,7 @@ class VersionInstaller(
         jobs.putIfAbsent(id, scope.launch(ioDispatcher) {
             var state: InstallState = InstallState(id, Phase.JSON)
             _states.update { it + (id to state) }
+            var phaseStartedAt: Long = System.nanoTime() / 1_000_000L
             try {
                 // 安装开始即锁定镜像（用户此刻的选择作用于整个安装过程）
                 val mirror: MirrorId = originMirror()
@@ -151,13 +152,21 @@ class VersionInstaller(
                 // 6. assets 对象（并发，逐文件 sha1 校验在 DownloadManager）
                 state = state.copy(phase = Phase.ASSETS, filesDone = 0, filesTotal = index.objects.size)
                 _states.update { it + (id to state) }
+                val assetsStartedAt: Long = System.nanoTime() / 1_000_000L
                 downloadAssets(index, File(gameDir, "assets/objects"), mirror) { done: Int, bytes: Long ->
                     _states.update { it + (id to state.copy(filesDone = done, bytesDone = bytes) ) }
                 }
+                Timber.i(
+                    "version install: assets %d files in %dms (concurrency=%d)",
+                    index.objects.size,
+                    (System.nanoTime() / 1_000_000L) - assetsStartedAt,
+                    ASSET_CONCURRENCY,
+                )
 
                 // 7. 完成
                 _states.update { it + (id to InstallState(id, Phase.DONE)) }
-                Timber.i("version installed: %s", id)
+                // 阶段耗时（真机日志对照用：开发者模式下的详尽日志可见各阶段耗时）
+                Timber.i("version installed: %s total %dms", id, (System.nanoTime() / 1_000_000L) - phaseStartedAt)
                 onInstalled(versionJson)
             } catch (t: Throwable) {
                 Timber.w(t, "version install failed: %s", id)
@@ -210,6 +219,7 @@ class VersionInstaller(
                 destFile = file,
                 sha1 = clientArtifact.sha1,
                 sizeBytes = clientArtifact.size,
+                chunkCount = CLIENT_CHUNKS,   // 大文件单文件并行（2026-11-03 提速）
                 onProgress = onProgress,
             )
         )
@@ -252,6 +262,7 @@ class VersionInstaller(
     ) = coroutineScope {
         var done: Int = 0
         var bytes: Long = 0L
+        var lastReport: Long = 0L
         val semaphore = Semaphore(ASSET_CONCURRENCY)
         val lock = Any()
         index.objects.entries.map { (name: String, obj: org.aclpe.core.download.resolve.AssetsObject) ->
@@ -276,7 +287,12 @@ class VersionInstaller(
                 synchronized(lock) {
                     done++
                     bytes += obj.size
-                    onProgress(done, bytes)
+                    // 节流：千级文件不必每个都推 UI（2026-11-03 提速配套）
+                    val now: Long = System.currentTimeMillis()
+                    if (now - lastReport >= PROGRESS_THROTTLE_MS || done == index.objects.size) {
+                        lastReport = now
+                        onProgress(done, bytes)
+                    }
                 }
             }
         }.forEach { it.join() }
@@ -371,8 +387,22 @@ class VersionInstaller(
 
     companion object {
         const val MANIFEST_URL: String = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
-        const val UA: String = "ACL-PE/0.0.5 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
-        const val LIBRARY_CONCURRENCY: Int = 4
-        const val ASSET_CONCURRENCY: Int = 8
+        const val UA: String = "ACL-PE/0.0.6 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
+
+        /**
+         * 并发度（2026-11-03 基线实测后定值，配合 app 侧 OkHttp 的 maxRequestsPerHost=32）：
+         * - 库文件数百 KB~数 MB：8 并发；
+         * - assets 多为几 KB~数十 KB 且**延迟主导**（单文件实测 0.87-3.9s）：
+         *   实测并发 8/24 均为 3.1-3.4x，而 16 并发曾因弱网重试放大反而变慢 →
+         *   取中间值 12，兼顾吞吐与弱网稳定性（重试退避会放大高并发失败）。
+         */
+        const val LIBRARY_CONCURRENCY: Int = 8
+        const val ASSET_CONCURRENCY: Int = 12
+
+        /** client.jar（约 20MB+）分片数：单文件并行提速。 */
+        const val CLIENT_CHUNKS: Int = 8
+
+        /** UI 进度上报节流（毫秒）：避免数千次 StateFlow 更新造成 UI 抖动。 */
+        const val PROGRESS_THROTTLE_MS: Long = 200L
     }
 }

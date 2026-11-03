@@ -47,8 +47,23 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
 
     val probe: EnvProbe = EnvProbe(RealProcessExecutor())
 
-    /** 共享 OkHttp 实例（审计低危#26：单连接池/线程池；下载与皮肤复用）。 */
+    /**
+     * 共享 OkHttp 实例（审计低危#26：单连接池/线程池；下载与皮肤复用）。
+     *
+     * 下载吞吐优化（2026-11-03，真机"像单线程"根因）：
+     * - OkHttp 默认 [okhttp3.Dispatcher.maxRequestsPerHost] = **5**：无论上层信号量设多大，
+     *   同一域名实际最多 5 个请求在飞 —— 这正是"一次只有一个在下载"的观感来源；
+     * - 默认 [okhttp3.ConnectionPool] 仅保留 5 个空闲连接：并发一高就反复 TLS 建连；
+     * - 小文件下载由延迟主导（实测单个 781B 文件 0.87-3.9s），必须靠并发重叠 RTT 提速。
+     */
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .dispatcher(
+            okhttp3.Dispatcher().apply {
+                maxRequests = MAX_REQUESTS
+                maxRequestsPerHost = MAX_REQUESTS_PER_HOST
+            }
+        )
+        .connectionPool(okhttp3.ConnectionPool(MAX_IDLE_CONNECTIONS, 5, TimeUnit.MINUTES))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(600, TimeUnit.SECONDS)
         .build()
@@ -150,6 +165,15 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     companion object {
         /** 骨架期固定 Profile 标识（与 AccountViewModel.PROFILE_ID 一致）。 */
         const val PROFILE_ID: String = "default"
+
+        /** 全局最大并发请求（OkHttp 默认 64 即此值，显式声明便于调优）。 */
+        const val MAX_REQUESTS: Int = 64
+
+        /** 单域名最大并发请求：**默认 5 → 32**（下载提速的关键项）。 */
+        const val MAX_REQUESTS_PER_HOST: Int = 32
+
+        /** 空闲连接池容量：**默认 5 → 32**（避免并发高时反复 TLS 建连）。 */
+        const val MAX_IDLE_CONNECTIONS: Int = 32
     }
 
     /** 游戏运行中禁止覆盖 options.txt（硬性约束）。 */

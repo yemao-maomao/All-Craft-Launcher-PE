@@ -101,18 +101,29 @@ class DownloadManager(
 
     private suspend fun transfer(request: DownloadRequest, url: String, partFile: File): AppResult<Unit> {
         val existing: Long = if (partFile.isFile) partFile.length() else 0L
+        val fresh: Boolean = existing == 0L
 
-        // 服务端总大小与续传起点（IO 异常收敛为 Err：沿调用链上抛会击穿调度器协程——审计高危#2）
-        val probe: Pair<Long, Boolean> = try {
-            probeSize(url, existing)  // (total, resumed)
-        } catch (t: Throwable) {
-            coroutineContext.ensureActive()
-            return AppResult.Err(AppError.Network("probe_failed", cause = t))
-        } ?: return AppResult.Err(AppError.Network("head_failed", "无法确定资源大小"))
+        // 吞吐优化（2026-11-03）：大小已知且为全新下载时**跳过 Range 探测**。
+        // 每个文件省一次往返；assets 类海量小文件场景下这是主要瓶颈之一
+        // （真机实测单个 781B 文件下载 0.87-3.9s，延迟主导 → RTT 数量决定总时长）。
+        val knownSize: Long? = request.sizeBytes?.takeIf { it > 0L }
+        val probe: Pair<Long, Boolean> = if (fresh && knownSize != null) {
+            knownSize to false
+        } else {
+            // 续传/大小未知：需要 Range 探测确定 total 与续传起点
+            // （IO 异常收敛为 Err：沿调用链上抛会击穿调度器协程——审计高危#2）
+            try {
+                probeSize(url, existing)  // (total, resumed)
+            } catch (t: Throwable) {
+                coroutineContext.ensureActive()
+                return AppResult.Err(AppError.Network("probe_failed", cause = t))
+            } ?: return AppResult.Err(AppError.Network("head_failed", "无法确定资源大小"))
+        }
         val (total, resumed) = probe
 
-        val fresh: Boolean = existing == 0L
-        return if (fresh && total > 0L && request.chunkCount > 1) {
+        // 分片阈值（2026-11-03）：小文件切多片会额外产生多个请求（每片一次 RTT）→ 反而更慢。
+        // 仅当文件足够大（≥ [MIN_CHUNKED_BYTES]）且分片数 > 1 时才分片并行。
+        return if (fresh && total >= MIN_CHUNKED_BYTES && request.chunkCount > 1) {
             downloadChunked(request, url, partFile, total)
         } else {
             downloadSingle(request, url, partFile, existing, resumed)
@@ -286,6 +297,9 @@ class DownloadManager(
         const val BUFFER_SIZE: Int = 64 * 1024
         const val MAX_ATTEMPTS_PER_MIRROR: Int = 3
         val BACKOFF_MS: LongArray = longArrayOf(1_000L, 4_000L, 16_000L)
+
+        /** 分片下载阈值：小文件切分片只会增加请求数与 RTT（2026-11-03 提速引入）。 */
+        const val MIN_CHUNKED_BYTES: Long = 512L * 1024L
 
         fun partOf(dest: File): File = File(dest.parentFile, dest.name + ".part")
     }
