@@ -79,7 +79,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     label = when (slot) {
                         8 -> "Java 8（老版本）"
                         17 -> "Java 17+"
-                        else -> "Java 21+"
+                        else -> "Java 21/25"
                     },
                     slot = slot,
                     phase = s?.phase ?: SimpleRuntimeInstaller.Phase.NOT_INSTALLED,
@@ -204,7 +204,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 nativesDir = File(profileDir, "natives"),
                 libraries = LibraryResolver.resolve(versionJson.libraries, PlatformContext.fromOsSpec(), MirrorId.OFFICIAL),
                 clientJar = File(profileDir, "versions/${installed.id}/${installed.id}.jar"),
-                javaMajor = installed.javaMajor ?: 17,
+                javaMajor = resolveJavaSlot(installed.javaMajor ?: 17),
                 memoryTier = MemoryTier.MEDIUM,
                 deviceMemoryMb = 2048,
             )
@@ -217,7 +217,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _launchMessage.value = "启动计划生成失败：$msg"
                 // 自愈：java 二进制缺失（历史残留/半装状态）→ 触发对应槽位重装（isReady 增强后重新安装）
                 if (code == "jre_binary_missing") {
-                    val major: Int = installed.javaMajor ?: 17
+                    val major: Int = resolveJavaSlot(installed.javaMajor ?: 17)
                     log("检测到 Java $major 运行环境异常，已自动触发重装，请稍候再试")
                     runtime.retry(major)
                 }
@@ -263,5 +263,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         const val MAX_LOG_LINES: Int = 500
+
+        /**
+         * Java 版本 → 实际槽位映射（atLeast 语义，2026-11-05 修复「Java 25 高版本路径没有文件」）：
+         * - Java 8 → 槽位 8（JRE8）；
+         * - Java 17 → 槽位 17（JRE22，兼容 17 字节码）；
+         * - Java 21/25 → 槽位 21（JRE25，兼容 21 与 25 字节码）。
+         * 最新 MC（26.x）要求 javaMajor=25，JRE25 可运行，故统一映射到 21 槽位。
+         */
+        fun resolveJavaSlot(javaMajor: Int): Int = when {
+            javaMajor >= 21 -> 21
+            javaMajor >= 17 -> 17
+            else -> 8
+        }
     }
 }
