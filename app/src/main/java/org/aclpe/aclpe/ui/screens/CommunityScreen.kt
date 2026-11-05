@@ -14,8 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -232,7 +234,11 @@ private fun LoaderTab(state: CommunityViewModel.UiState, viewModel: CommunityVie
             items(state.loaderVersions.take(30), key = { it.version }) { loaderVersion: ModLoaderVersion ->
                 val newId: String = viewModel.newVersionId(state.loaderKind, loaderVersion.version, parentId)
                 val installState: ModLoaderInstaller.InstallState? = state.loaderInstallStates[newId]
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
@@ -287,7 +293,11 @@ private fun LoaderTab(state: CommunityViewModel.UiState, viewModel: CommunityVie
 
 @Composable
 private fun ProjectCard(project: ModrinthProject, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(text = project.title ?: project.slug ?: "?", style = MaterialTheme.typography.titleSmall)
             Text(
@@ -307,7 +317,11 @@ private fun ProjectCard(project: ModrinthProject, onClick: () -> Unit) {
 
 @Composable
 private fun ModVersionCard(version: ModrinthVersion, progress: Float?, onInstall: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+    ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
