@@ -35,8 +35,16 @@ jobs:
           # libopenal.so 已从 FCL 裸 .so 改为 aar，原 wget 会 404（退出码 8）
           # 删除该下载行；libopenal.so 改由下一步从 openal-soft-release.aar 提取
           sed -i '/wget.*libopenal\.so/d' ci_build_android.bash
-          echo "--- libopenal lines removed ---"
-          grep -n 'libopenal' ci_build_android.bash || echo "(no libopenal references remain)"
+          # NDK r27 的 jni.h 把 GetEnv/AttachCurrentThread 的 penv 参数从 void** 改为 JNIEnv**，
+          # LWJGL 旧代码的 (void **)&env 强转会报 incompatible-pointer-types fatal error，去掉强转
+          python3 -c "
+import pathlib
+p = pathlib.Path('modules/lwjgl/core/src/main/c/common_tools.c')
+c = p.read_text()
+c = c.replace('(void **)&env', '&env')
+p.write_text(c)
+print('patched common_tools.c')
+"
 
       - name: Fetch libopenal.so (from openal-soft aar)
         working-directory: LWJGL-Pojav
