@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import org.aclpe.aclpe.ACLApplication
 import org.aclpe.aclpe.core.env.EnvDependencies
 import org.aclpe.aclpe.core.env.SimpleRuntimeInstaller
+import org.aclpe.aclpe.core.launch.JniJvmLauncher
 import org.aclpe.aclpe.ui.account.AccountViewModel
 import org.aclpe.core.account.model.Account
 import org.aclpe.core.account.model.AccountType
@@ -25,6 +26,7 @@ import org.aclpe.core.download.mirror.MirrorId
 import org.aclpe.core.download.resolve.LibraryResolver
 import org.aclpe.core.download.rules.PlatformContext
 import org.aclpe.core.env.store.VersionEntity
+import org.aclpe.core.launch.args.LaunchArgsBuilder
 import org.aclpe.core.launch.model.LaunchAuth
 import org.aclpe.core.launch.model.LaunchContext
 import org.aclpe.core.launch.model.MemoryTier
@@ -224,38 +226,61 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _running.value = false
                 return@launch
             }
-            log("启动计划就绪，正在启动进程…")
-            val start = deps.gameProcessStarter.start(
-                plan.getOrNull()!!,
-                stdoutLog = File(profileDir, "logs/game-stdout.log"),
-                stderrLog = File(profileDir, "logs/game-stderr.log"),
-            )
-            if (start.isOk) {
+            log("启动计划就绪，正在通过 JNI 启动 JVM…")
+            val command = plan.getOrNull()!!
+            try {
+                // 1. libjvm.so 路径（javaBinary 的 bin/../lib/server/libjvm.so）
+                val jreDir: File = deps.layout.jreDir(context.javaMajor)
+                val libjvm: File = File(jreDir, "lib/server/libjvm.so")
+                if (!libjvm.isFile) {
+                    log("libjvm.so 缺失：${libjvm.absolutePath}")
+                    _launchMessage.value = "JVM 库缺失，请重试环境安装"
+                    runtime.retry(context.javaMajor)
+                    _running.value = false
+                    return@launch
+                }
+                // 2. 绝对 classpath（JNI 无 cwd 概念，须拼 gameDir 绝对路径）
+                val sep: String = org.aclpe.core.common.platform.OsSpec.SEPARATOR.toString()
+                val relativeCp: String = LaunchArgsBuilder.classpathString(context)
+                val absoluteCp: String = relativeCp.split(sep)
+                    .joinToString(sep) { File(context.gameDir, it).absolutePath }
+                // 3. mainClass + jvmArgs（去掉 -cp 对与末尾 mainClass，避免与 JNI 的绝对 classpath 冲突）
+                val mainClass: String = context.version.mainClass
+                val fullJvm: List<String> = LaunchArgsBuilder.buildJvmArgs(context)
+                val jvmArgs: List<String> = buildList {
+                    var i = 0
+                    val noMain = fullJvm.dropLast(1)
+                    while (i < noMain.size) {
+                        if (noMain[i] == "-cp") { i += 2; continue }
+                        add(noMain[i]); i++
+                    }
+                }
+                val gameArgs: List<String> = LaunchArgsBuilder.buildGameArgs(context)
+
+                // 4. 环境变量注入
+                val launcher = JniJvmLauncher()
+                command.env.forEach { (k, v) -> launcher.setenv(k, v) }
+
+                // 5. 独立线程启动（launchJvm 阻塞到游戏退出）
                 org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(true)
-                log("游戏进程已启动")
-                _launchMessage.value = "游戏进程已启动"
-                val process: org.aclpe.core.launch.process.GameProcess = start.getOrNull()!!
-                viewModelScope.launch(Dispatchers.IO) {
-                    val exit: Int = process.waitFor()
+                _running.value = true
+                log("JVM 启动中：mainClass=$mainClass")
+                _launchMessage.value = "游戏启动中（JNI 进程内 JVM）"
+                Thread({
+                    launcher.redirectStdio()
+                    launcher.setupExitTrap(launcher)
+                    val code: Int = launcher.launchJvm(
+                        libjvm.absolutePath, absoluteCp, mainClass,
+                        jvmArgs.toTypedArray(), gameArgs.toTypedArray(),
+                    )
                     org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(false)
                     _running.value = false
-                    log("游戏已退出（退出码 $exit）")
-                    Timber.i("game exited: code=%d", exit)
-                }
-            } else {
-                // 真机 W^X：ProcessBuilder 执行应用数据目录内 java 二进制会被系统拒绝（IOException）。
-                val code: String = start.errorOrNull()?.code ?: "unknown"
-                log(if (code == "game_process_start_failed") {
-                    "启动失败：Android 系统安全策略禁止直接运行 Java（W^X），JNI 启动引擎开发中"
-                } else {
-                    "启动失败：$code"
-                })
-                _launchMessage.value = if (code == "game_process_start_failed") {
-                    "环境/版本/账号均已就绪，但当前 Android 系统安全策略禁止直接运行 Java（W^X）。" +
-                        "完整启动引擎（JNI 进程内 JVM，FCL 同款）开发中——此为本应用最后一块待接入能力。"
-                } else {
-                    "启动失败：$code"
-                }
+                    log("JVM 已退出（返回码 $code）")
+                    Timber.i("jni launch returned: code=%d", code)
+                }, "aclpe-jvm").start()
+            } catch (t: Throwable) {
+                log("JNI 启动异常：${t.message}")
+                _launchMessage.value = "JNI 启动失败：${t.message}"
                 _running.value = false
             }
         }
