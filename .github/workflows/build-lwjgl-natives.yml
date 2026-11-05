@@ -29,24 +29,14 @@ jobs:
           unzip -q android-ndk-r27-linux.zip
           echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r27" >> "$GITHUB_ENV"
 
-      - name: Patch ci script (skip stale downloads)
+      - name: Patch ci script (remove stale libopenal download)
         working-directory: LWJGL-Pojav
         run: |
-          # libopenal.so 已从 FCL 仓库移除（改为 openal-soft-release.aar），原 wget 会 404 退出码 8
-          # 故删除该下载并禁用 openal 绑定（openal 后续从 openal-soft 源码单独编译）
-          python3 - <<'PY'
-          import re
-          with open('ci_build_android.bash') as f:
-              c = f.read()
-          c = re.sub(r'.*wget.*libopenal\.so.*\n', '', c)
-          c = c.replace(
-              'yes | ant -Dplatform.linux=true',
-              'yes | ant -Dplatform.linux=true -Dbinding.openal=false'
-          )
-          with open('ci_build_android.bash', 'w') as f:
-              f.write(c)
-          print('patched ci_build_android.bash')
-          PY
+          # FCL 仓库已把 libopenal.so 从裸 .so 改为 aar，原 wget 会 404（退出码 8）
+          sed -i '/wget.*libopenal\.so/d' ci_build_android.bash
+          sed -i 's/yes | ant -Dplatform.linux=true/yes | ant -Dplatform.linux=true -Dbinding.openal=false/' ci_build_android.bash
+          echo "--- patched ci_build_android.bash (libopenal lines removed) ---"
+          grep -n 'libopenal\|binding.openal' ci_build_android.bash || echo "(no libopenal references remain)"
 
       - name: Build natives (arm64)
         working-directory: LWJGL-Pojav
@@ -55,7 +45,6 @@ jobs:
           export LWJGL_BUILD_ARCH=arm64
           export SKIP_LIBFFI=1
           export SKIP_FREETYPE=1
-          # 不静默，便于失败时定位
           bash ci_build_android.bash
 
       - name: Upload natives
