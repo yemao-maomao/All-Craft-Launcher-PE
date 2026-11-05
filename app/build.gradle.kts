@@ -15,12 +15,25 @@ android {
         applicationId = "org.aclpe.aclpe"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 12
-        versionName = "0.1.5"
+        versionCode = 13
+        versionName = "0.1.6"
 
         // 硬性约束：arm64 only。32 位设备在安装期即被拒绝（APK ABI 过滤），另有运行时 AbiGuard 兜底。
         ndk {
             abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+            }
+        }
+    }
+
+    // JNI 进程内 JVM 启动桥（仿造 FCL/Pojav，自研 C 代码）
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 
