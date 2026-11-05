@@ -66,7 +66,18 @@ fun AppNavHost(
             startDestination = Destination.Home.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Destination.Home.route) { HomeScreen(homeViewModel) }
+            composable(Destination.Home.route) {
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onNavigateToVersions = {
+                        navController.navigate(Destination.Versions.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            }
             composable(Destination.Versions.route) { VersionsScreen(versionsViewModel) }
             composable(Destination.Community.route) { CommunityScreen(communityViewModel) }
             composable(Destination.Settings.route) { SettingsScreen(appSettings, accountViewModel, gameSettingsViewModel) }

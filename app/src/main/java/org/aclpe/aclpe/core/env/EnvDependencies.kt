@@ -41,6 +41,9 @@ import java.util.concurrent.TimeUnit
  */
 class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: AppSettings) {
 
+    /** 全局设置（暴露给 ViewModel：选中版本、主题等）。 */
+    val appSettings: AppSettings = appSettings
+
     val layout: EnvLayout = EnvLayout(context.filesDir)
 
     val store: EnvStore = RoomEnvStore(LauncherDatabase.get(context).envItemDao())

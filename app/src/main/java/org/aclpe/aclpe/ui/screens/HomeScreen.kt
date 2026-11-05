@@ -1,7 +1,9 @@
 package org.aclpe.aclpe.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,175 +11,243 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.aclpe.aclpe.R
 import org.aclpe.aclpe.core.env.SimpleRuntimeInstaller
 import org.aclpe.aclpe.ui.home.HomeViewModel
+import org.aclpe.core.account.model.Account
+import org.aclpe.core.account.model.AccountType
+import org.aclpe.core.env.store.VersionEntity
 
 /**
- * 首页：环境卡片（FCL 式线性部署，2026-11-02 重写）。
- * 每行四态：未安装 / 安装中（进度条）/ ✓ 就绪 / 失败（错误码 + 重试按钮）。
- * 完成即 READY——不再有「处理中」。
+ * 首页（2026-11-05 仿 FCL 重构）：
+ * - 顶部账户区（昵称 + 类型）；
+ * - 中央：当前版本名（点击切换）+ 大启动按钮；
+ * - 底部环境状态小字（未就绪时门禁提示）；
+ * - 版本选择：底部弹层列出已安装版本，点选即切换；含「去下载版本」入口。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
-    val uiState: HomeViewModel.EnvUiState by viewModel.uiState.collectAsStateWithLifecycle()
+fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit) {
+    val state: HomeViewModel.HomeUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val launchMessage: String? by viewModel.launchMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showVersionPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(launchMessage) {
         launchMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             viewModel.consumeLaunchMessage()
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // 顶部账户区（FCL 风格）
+            AccountHeader(account = state.account, onNavigateToSettings = null)
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 当前版本名（点击切换）
+            TextButton(onClick = { showVersionPicker = true }) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = state.effectiveVersion?.id ?: stringResource(R.string.home_no_version),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.home_tap_switch_version),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 大启动按钮（FCL 式大方块）
+            Button(
+                onClick = { viewModel.launch() },
+                enabled = state.overallReady,
+                colors = ButtonDefaults.buttonColors(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .height(140.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.home_env_card_title),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = if (uiState.overallReady) {
-                            stringResource(R.string.env_status_ready)
-                        } else {
-                            stringResource(R.string.env_status_missing)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (uiState.overallReady) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                uiState.items.forEach { item: HomeViewModel.EnvUiItem ->
-                    RuntimeRow(item = item, onInstall = { viewModel.install(item.slot) })
-                }
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = stringResource(R.string.env_runtime_note),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = stringResource(if (state.overallReady) R.string.home_launch_ready else R.string.home_launch_disabled),
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = { viewModel.launch() },
-            enabled = uiState.overallReady,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 环境状态门禁小字
             Text(
-                text = stringResource(
-                    if (uiState.overallReady) R.string.home_launch_ready else R.string.home_launch_disabled
-                ),
+                text = if (state.overallReady) {
+                    stringResource(R.string.env_status_ready)
+                } else {
+                    envStatusLine(state)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.overallReady) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                textAlign = TextAlign.Center,
+            )
+            if (!state.overallReady) {
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(
+                    onClick = {
+                        state.envItems
+                            .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
+                            .forEach { viewModel.install(it.slot) }
+                    },
+                ) {
+                    Text(stringResource(R.string.home_retry_env))
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+        }
+    }
+
+    if (showVersionPicker) {
+        ModalBottomSheet(onDismissRequest = { showVersionPicker = false }) {
+            VersionPickerSheet(
+                state = state,
+                onSelect = { id ->
+                    viewModel.selectVersion(id)
+                    showVersionPicker = false
+                },
+                onNavigateToVersions = {
+                    showVersionPicker = false
+                    onNavigateToVersions()
+                },
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.home_launch_gate_hint),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
 @Composable
-private fun RuntimeRow(item: HomeViewModel.EnvUiItem, onInstall: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+private fun AccountHeader(account: Account?, onNavigateToSettings: (() -> Unit)?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.label,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
+                text = account?.username ?: stringResource(R.string.home_account_none),
+                style = MaterialTheme.typography.titleMedium,
             )
-            when (item.phase) {
-                SimpleRuntimeInstaller.Phase.READY ->
-                    Text(
-                        text = stringResource(R.string.env_status_ready),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                SimpleRuntimeInstaller.Phase.INSTALLING -> {
-                    Text(
-                        text = stringResource(R.string.env_status_installing),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(onClick = {}) {
-                        Text(text = stringResource(R.string.env_status_installing))
-                    }
-                }
-                SimpleRuntimeInstaller.Phase.FAILED -> {
-                    Text(
-                        text = stringResource(R.string.env_status_failed) +
-                            (item.errorCode?.let { "（$it）" } ?: ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    TextButton(onClick = onInstall) {
-                        Text(text = stringResource(R.string.env_action_retry))
-                    }
-                }
-                SimpleRuntimeInstaller.Phase.NOT_INSTALLED -> {
-                    Text(
-                        text = stringResource(R.string.env_status_missing),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(onClick = onInstall) {
-                        Text(text = stringResource(R.string.env_action_install))
+            Text(
+                text = when (account?.type) {
+                    AccountType.LOCAL_OFFLINE -> stringResource(R.string.account_type_offline)
+                    AccountType.MICROSOFT -> stringResource(R.string.account_type_microsoft)
+                    null -> stringResource(R.string.home_account_hint)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VersionPickerSheet(
+    state: HomeViewModel.HomeUiState,
+    onSelect: (String) -> Unit,
+    onNavigateToVersions: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            text = stringResource(R.string.home_select_version),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if (state.installedVersions.isEmpty()) {
+            Text(
+                text = stringResource(R.string.home_no_installed_version),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            LazyColumn {
+                items(state.installedVersions, key = { it.id }) { version: VersionEntity ->
+                    val selected: Boolean = version.id == state.effectiveVersion?.id
+                    Surface(
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp)
+                            .clickable { onSelect(version.id) },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = version.id, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = version.type,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (selected) {
+                                Text(
+                                    text = stringResource(R.string.env_status_ready),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
-        if (item.phase == SimpleRuntimeInstaller.Phase.INSTALLING) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp),
-            )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = onNavigateToVersions, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.home_go_download_version))
         }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+/** 环境未就绪时，展示哪些槽位还没好（简洁一行）。 */
+@Composable
+private fun envStatusLine(state: HomeViewModel.HomeUiState): String {
+    val notReady: List<String> = state.envItems
+        .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
+        .map { it.label }
+    return if (notReady.isEmpty()) {
+        stringResource(R.string.env_status_ready)
+    } else {
+        "环境未就绪：${notReady.joinToString("、")}（点击下方版本页无关，环境在首次启动自动安装，失败可在此重试）"
     }
 }

@@ -24,6 +24,9 @@ object AppSettingsKeys {
 
     /** 同意时间戳（本机记录，作为同意事实凭证）。 */
     val LEGAL_ACCEPTED_AT: Preferences.Key<Long> = longPreferencesKey("legal_accepted_at")
+
+    /** 当前选中的游戏版本 id（首页启动按钮的目标版本；null = 尚未选择）。 */
+    val SELECTED_VERSION_ID: Preferences.Key<String> = stringPreferencesKey("selected_version_id")
 }
 
 enum class ThemeMode {
@@ -55,6 +58,10 @@ class AppSettings(private val context: Context) {
     val legalAcceptedVersion: Flow<String?> =
         context.appSettingsDataStore.data.map { it[AppSettingsKeys.LEGAL_ACCEPTED_VERSION] }
 
+    /** 当前选中的游戏版本 id（首页启动按钮目标；FCL 式版本切换）。 */
+    val selectedVersionId: Flow<String?> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.SELECTED_VERSION_ID] }
+
     suspend fun setCrashCaptureEnabled(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.CRASH_CAPTURE_ENABLED] = value }
     }
@@ -76,6 +83,14 @@ class AppSettings(private val context: Context) {
         context.appSettingsDataStore.edit { prefs ->
             prefs[AppSettingsKeys.LEGAL_ACCEPTED_VERSION] = version
             prefs[AppSettingsKeys.LEGAL_ACCEPTED_AT] = System.currentTimeMillis()
+        }
+    }
+
+    /** 设置当前选中的游戏版本（null = 清除选择）。 */
+    suspend fun setSelectedVersionId(versionId: String?) {
+        context.appSettingsDataStore.edit { prefs ->
+            if (versionId == null) prefs.remove(AppSettingsKeys.SELECTED_VERSION_ID)
+            else prefs[AppSettingsKeys.SELECTED_VERSION_ID] = versionId
         }
     }
 }
