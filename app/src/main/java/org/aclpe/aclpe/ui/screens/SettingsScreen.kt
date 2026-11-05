@@ -159,13 +159,17 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        val alphaLocal = remember { mutableStateOf(bgAlpha) }
+        LaunchedEffect(bgAlpha) { alphaLocal.value = bgAlpha }
         Text(
-            text = stringResource(R.string.settings_background_alpha, (bgAlpha * 100).toInt()),
+            text = stringResource(R.string.settings_background_alpha, (alphaLocal.value * 100).toInt()),
             style = MaterialTheme.typography.bodyLarge,
         )
         Slider(
-            value = bgAlpha,
-            onValueChange = { scope.launch { appSettings.setBackgroundAlpha(it) } },
+            value = alphaLocal.value,
+            onValueChange = { alphaLocal.value = it },
+            // 拖动过程只更新本地状态，松手才写盘——避免高频 DataStore 写导致的卡顿（2026-11 流畅性优化）
+            onValueChangeFinished = { scope.launch { appSettings.setBackgroundAlpha(alphaLocal.value) } },
             valueRange = 0f..1f,
         )
 

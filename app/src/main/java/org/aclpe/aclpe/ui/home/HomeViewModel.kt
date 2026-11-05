@@ -206,9 +206,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             log("正在生成启动计划…")
             val plan = deps.launchPlanBuilder.build(context)
             if (plan.isErr) {
-                val msg: String = plan.errorOrNull()?.message ?: plan.errorOrNull()?.code ?: "unknown"
+                val code: String? = plan.errorOrNull()?.code
+                val msg: String = plan.errorOrNull()?.message ?: code ?: "unknown"
                 log("启动计划生成失败：$msg")
                 _launchMessage.value = "启动计划生成失败：$msg"
+                // 自愈：java 二进制缺失（历史残留/半装状态）→ 触发对应槽位重装（isReady 增强后重新安装）
+                if (code == "jre_binary_missing") {
+                    val major: Int = installed.javaMajor ?: 17
+                    log("检测到 Java $major 运行环境异常，已自动触发重装，请稍候再试")
+                    runtime.retry(major)
+                }
                 _running.value = false
                 return@launch
             }
