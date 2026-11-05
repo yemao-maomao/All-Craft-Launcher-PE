@@ -15,6 +15,7 @@ import org.aclpe.core.account.store.EncryptedTokenStore
 import org.aclpe.core.account.store.FileAccountStore
 import org.aclpe.core.download.install.JreInstaller
 import org.aclpe.core.download.net.DownloadManager
+import org.aclpe.core.download.net.DownloadRequest
 import org.aclpe.core.download.sched.DownloadSchedulerImpl
 import org.aclpe.core.env.bootstrap.DownloadScheduler
 import org.aclpe.core.env.bootstrap.EnvBootstrap
@@ -24,6 +25,7 @@ import org.aclpe.core.env.probe.EnvLayout
 import org.aclpe.core.env.probe.EnvProbe
 import org.aclpe.core.env.probe.RealProcessExecutor
 import org.aclpe.core.env.store.EnvStore
+import org.aclpe.core.env.store.EnvItemEntity
 import org.aclpe.core.env.store.LauncherDatabase
 import org.aclpe.core.env.store.RoomEnvStore
 import org.aclpe.core.env.store.VersionDao
@@ -108,9 +110,30 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
 
     val bootstrap: EnvBootstrap = EnvBootstrap(probe, scheduler, store, layout)
 
-    /** FCL 式运行时部署（2026-11-02 用户指令重写）：线性流程，完成后状态直达 UI。 */
+    /** FCL 式运行时部署（2026-11-02 用户指令重写）：线性流程，完成后状态直达 UI。
+     *  Java 8 槽位走网络下载（选择性安装，不打包进 APK）。 */
     val runtimeInstaller: SimpleRuntimeInstaller =
-        SimpleRuntimeInstaller.create(context, appScope)
+        SimpleRuntimeInstaller.create(
+            context, appScope,
+            networkProvider = { slot: Int ->
+                val component: String = EnvItemEntity.jre(slot)
+                val spec: EnvDownloadSpec? = JreManifest.specs()[component]
+                if (spec == null) {
+                    null
+                } else {
+                    val tmp: File = File(layout.downloadsTmp, "jre-$slot.tar.xz")
+                    manager.download(
+                        DownloadRequest(
+                            id = "jre:$slot",
+                            url = spec.url,
+                            destFile = tmp,
+                            sha1 = spec.sha256,
+                            sizeBytes = spec.sizeBytes,
+                        )
+                    ).getOrNull()
+                }
+            },
+        )
 
     /** 原版下载镜像（设置项 → 每次安装开始时取一次）：切换后版本下载立即使用所选镜像。 */
     private val originMirrorProvider: suspend () -> org.aclpe.core.download.mirror.MirrorId = {

@@ -35,6 +35,11 @@ class SimpleRuntimeInstaller(
     private val assetProvider: suspend (slot: Int) -> File?,
     private val installer: suspend (slot: Int, archive: File) -> Unit,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * 资产缺失时的网络下载回退（2026-11 新增：Java 8 槽位选择性安装，不打包进 APK，
+     * 由用户手动触发后走网络下载）。返回下载好的本地文件，失败/无源返回 null。
+     */
+    private val networkProvider: (suspend (slot: Int) -> File?)? = null,
 ) {
 
     enum class Phase { NOT_INSTALLED, INSTALLING, READY, FAILED }
@@ -60,6 +65,7 @@ class SimpleRuntimeInstaller(
         jobs.putIfAbsent(slot, scope.launch(ioDispatcher) {
             try {
                 val archive: File = assetProvider(slot)
+                    ?: networkProvider?.invoke(slot)
                     ?: throw IllegalStateException("no_asset")
                 installer(slot, archive)
                 if (!isReady(slot)) throw IllegalStateException("install_incomplete")
@@ -88,8 +94,12 @@ class SimpleRuntimeInstaller(
     }
 
     companion object {
-        /** 生产工厂：APK 资产 + JreInstaller + files/env 布局。 */
-        fun create(context: Context, scope: CoroutineScope): SimpleRuntimeInstaller {
+        /** 生产工厂：APK 资产 + JreInstaller + files/env 布局；[networkProvider] 供选择性安装槽位网络下载。 */
+        fun create(
+            context: Context,
+            scope: CoroutineScope,
+            networkProvider: (suspend (Int) -> File?)? = null,
+        ): SimpleRuntimeInstaller {
             val layout: EnvLayout = EnvLayout(context.filesDir)
             val assetCache: AssetJreCache = AssetJreCache(context)
             return SimpleRuntimeInstaller(
@@ -114,6 +124,7 @@ class SimpleRuntimeInstaller(
                     val result: AppResult<File> = JreInstaller.install(archive, layout, slot, buildId, spec.sha256)
                     if (result is AppResult.Err) throw IllegalStateException(result.error.code)
                 },
+                networkProvider = networkProvider,
             )
         }
 

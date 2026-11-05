@@ -120,11 +120,25 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit, modif
             TextButton(
                 onClick = {
                     state.envItems
-                        .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
+                        .filter { it.slot != 8 && it.phase != SimpleRuntimeInstaller.Phase.READY }
                         .forEach { viewModel.install(it.slot) }
                 },
             ) {
                 Text(stringResource(R.string.home_retry_env))
+            }
+        }
+        // Java 8 选择性安装（独立按钮，需手动触发走网络下载）
+        val java8: HomeViewModel.EnvUiItem? = state.envItems.firstOrNull { it.slot == 8 }
+        if (java8 != null && java8.phase != SimpleRuntimeInstaller.Phase.READY) {
+            TextButton(onClick = { viewModel.install(8) }) {
+                Text(
+                    text = if (java8.phase == SimpleRuntimeInstaller.Phase.INSTALLING) {
+                        stringResource(R.string.home_java8_installing)
+                    } else {
+                        stringResource(R.string.home_java8_install)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
         }
     }
@@ -237,7 +251,7 @@ private fun VersionPickerSheet(
 @Composable
 private fun envStatusLine(state: HomeViewModel.HomeUiState): String {
     val notReady: List<String> = state.envItems
-        .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
+        .filter { it.slot != 8 && it.phase != SimpleRuntimeInstaller.Phase.READY }
         .map { it.label }
     return if (notReady.isEmpty()) stringResource(R.string.env_status_ready)
     else "环境未就绪：${notReady.joinToString("、")}"

@@ -73,15 +73,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         accountFlow(),
     ) { states, versions, selectedId, account ->
         HomeUiState(
-            envItems = listOf(17, 21).map { slot ->
+            envItems = listOf(8, 17, 21).map { slot ->
                 val s = states[slot]
                 EnvUiItem(
-                    label = "Java $slot+",
+                    label = when (slot) {
+                        8 -> "Java 8（老版本）"
+                        17 -> "Java 17+"
+                        else -> "Java 21+"
+                    },
                     slot = slot,
                     phase = s?.phase ?: SimpleRuntimeInstaller.Phase.NOT_INSTALLED,
                     errorCode = s?.errorCode,
                 )
             },
+            // 门禁只看 17/21（Java 8 为选择性安装，不参与「环境就绪」判断）
             overallReady = states[17]?.phase == SimpleRuntimeInstaller.Phase.READY &&
                 states[21]?.phase == SimpleRuntimeInstaller.Phase.READY,
             installedVersions = versions.filter { it.installed }.sortedBy { it.id },
@@ -94,7 +99,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         refresh()
     }
 
-    /** 幂等：标记在立即 READY；未装则走线性部署。 */
+    /** 幂等：标记在立即 READY；未装则走线性部署。Java 8 为选择性安装，不在此自动触发。 */
     fun refresh() {
         runtime.ensure(17)
         runtime.ensure(21)

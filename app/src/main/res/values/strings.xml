@@ -52,6 +52,8 @@
     <string name="home_no_installed_version">暂无已安装版本，请先到版本页下载</string>
     <string name="home_go_download_version">去下载版本</string>
     <string name="home_retry_env">重试环境安装</string>
+    <string name="home_java8_install">安装 Java 8（老版本，需联网下载）</string>
+    <string name="home_java8_installing">Java 8 下载安装中…</string>
 
     <!-- 环境卡片状态（FCL 式线性部署） -->
     <string name="env_status_ready">✓ 就绪</string>
