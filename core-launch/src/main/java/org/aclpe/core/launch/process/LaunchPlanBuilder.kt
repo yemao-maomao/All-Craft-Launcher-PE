@@ -27,7 +27,8 @@ class LaunchPlanBuilder(private val layout: EnvLayout) {
                 gameArgs = LaunchArgsBuilder.buildGameArgs(ctx),
                 env = mapOf(
                     "JAVA_HOME" to layout.jreDir(ctx.javaMajor).absolutePath,
-                    "LD_LIBRARY_PATH" to layout.jreLibPathCandidates(ctx.javaMajor),
+                    // 加 natives 目录：让 LWJGL 能 dlopen gl4es(libGL.so.1) 与 lwjgl natives
+                    "LD_LIBRARY_PATH" to (layout.jreLibPathCandidates(ctx.javaMajor) + ":" + ctx.nativesDir.absolutePath),
                     "ANDROID_DATA" to layout.root.absolutePath,
                     "ANDROID_ROOT" to "/system",
                     "HOME" to ctx.gameDir.absolutePath,
