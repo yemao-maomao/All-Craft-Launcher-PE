@@ -23,6 +23,9 @@ import org.aclpe.core.env.store.VersionEntity
  * - 安装：VersionInstaller 线性流水线（json → jar → 库 → natives → assets），
  *   进度/失败状态直达 UI，完成后写 versions 表 installed=true（启动链路随之可用）。
  */
+/** 版本分类（2026-11 版本页折叠三块）。 */
+enum class VersionCategory { RELEASE, APRIL_FOOLS, SNAPSHOT }
+
 class VersionsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val deps: EnvDependencies = (application as ACLApplication).envDependencies
@@ -68,7 +71,7 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = if (manifest != null) {
                 _uiState.value.copy(
                     loading = false,
-                    versions = manifest.versions.filter { it.type == "release" },
+                    versions = manifest.versions,   // 全部版本类型（release/snapshot/old_beta/old_alpha）
                     latestRelease = manifest.latest.release,
                 )
             } else {
@@ -90,6 +93,53 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
         } else {
             state.versions.filter { it.id.contains(q, ignoreCase = true) }.take(100)
         }
+    }
+
+    /** 分类后的版本列表（搜索过滤 + 三分类 + 正式版按版本号降序）。 */
+    fun categorizedVersions(): Map<VersionCategory, List<ManifestVersion>> {
+        val state: UiState = _uiState.value
+        val q: String = state.query.trim()
+        val filtered: List<ManifestVersion> = if (q.isEmpty()) {
+            state.versions
+        } else {
+            state.versions.filter { it.id.contains(q, ignoreCase = true) }
+        }
+        return mapOf(
+            VersionCategory.RELEASE to filtered
+                .filter { it.type == "release" }
+                .sortedWith { a, b -> versionCompare(a.id, b.id) },
+            VersionCategory.APRIL_FOOLS to filtered.filter { it.id in APRIL_FOOLS_IDS },
+            VersionCategory.SNAPSHOT to filtered.filter {
+                it.type != "release" && it.id !in APRIL_FOOLS_IDS
+            },
+        )
+    }
+
+    /** Minecraft 版本号比较（按 . 分段转整数逐段比较，缺失补 0；返回降序）。 */
+    private fun versionCompare(a: String, b: String): Int {
+        val pa: List<Int> = a.split('.').mapNotNull { it.toIntOrNull() }
+        val pb: List<Int> = b.split('.').mapNotNull { it.toIntOrNull() }
+        val n: Int = maxOf(pa.size, pb.size)
+        for (i in 0 until n) {
+            val va: Int = pa.getOrElse(i) { 0 }
+            val vb: Int = pb.getOrElse(i) { 0 }
+            if (va != vb) return vb - va
+        }
+        return 0
+    }
+
+    companion object {
+        /** Minecraft 官方愚人节版本 id（type 均为 snapshot，靠 id 识别）。 */
+        val APRIL_FOOLS_IDS: Set<String> = setOf(
+            "2.0",                    // 2013 红蓝版本
+            "15w14a",                 // 2015 The Love and Hugs Update
+            "1.RV-Pre1",              // 2016 Trendy Update
+            "3D Shareware v1.34",     // 2019 3D 共享版
+            "20w14infinite",          // 2020 20w14∞
+            "22w13oneBlockAtATime",   // 2022 One Block at a Time
+            "23w13a_or_b",            // 2023 Vote Update
+            "24w14potato",            // 2024 Poisonous Potato Update
+        )
     }
 
     /** 安装版本：完成后写 versions 表 installed=true（javaMajor/资产索引随写，启动链路直接可用）。 */
