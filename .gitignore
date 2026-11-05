@@ -26,4 +26,7 @@ acl-recovery/
 
 # 内置 JRE 资产（92MB，不入库；用 scripts/fetch-jre-assets.cmd 拉取）
 app/src/main/assets/runtimes/*.xz
+
+# gl4es 渲染桥产物（arm64 libGL.so.1，不入库；用 scripts/build-gl4es.cmd 编译）
+app/src/main/assets/natives/
 local.properties
