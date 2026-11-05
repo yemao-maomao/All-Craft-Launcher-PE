@@ -121,7 +121,19 @@ fun SettingsScreen(
             val pickImage = rememberLauncherForActivityResult(
                 ActivityResultContracts.PickVisualMedia()
             ) { uri ->
-                if (uri != null) scope.launch { appSettings.setBackgroundImageUri(uri.toString()) }
+                if (uri != null) scope.launch {
+                    // 复制到应用私有目录，避免 content URI 临时权限失效（下次启动读不到）
+                    val dest = java.io.File(context.filesDir, "background.jpg")
+                    val copied: Boolean = try {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            dest.outputStream().use { output -> input.copyTo(output) }
+                        } != null
+                    } catch (_: Throwable) {
+                        false
+                    }
+                    if (copied) appSettings.setBackgroundImageUri(dest.absolutePath)
+                    else appSettings.setBackgroundImageUri(uri.toString())
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -195,7 +207,12 @@ fun SettingsScreen(
         CollapsibleSection(title = stringResource(R.string.settings_cat_download), initiallyExpanded = true) {
             Text(stringResource(R.string.settings_origin_mirror), style = MaterialTheme.typography.bodyLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("OFFICIAL" to "官方源", "BMCLAPI" to "BMCLAPI（推荐）").forEach { (id, label) ->
+                listOf(
+                    "AUTO" to "自动测速（推荐）",
+                    "BMCLAPI" to "BMCLAPI",
+                    "HKMC" to "HKMC",
+                    "OFFICIAL" to "官方",
+                ).forEach { (id, label) ->
                     FilterChip(
                         selected = gameSettingsState.launcher.mirrorId == id,
                         onClick = { gameSettingsViewModel.setOriginMirror(id) },

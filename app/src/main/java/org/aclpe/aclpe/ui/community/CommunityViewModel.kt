@@ -221,6 +221,11 @@ class CommunityViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** 取消加载器安装（2026-11：下载取消选项）。 */
+    fun cancelLoader(newId: String) {
+        loaderInstaller.cancel(newId)
+    }
+
     companion object {
         /** 骨架期固定目标游戏版本（后续随"当前 Profile 所选版本"联动）。 */
         const val GAME_VERSION: String = "1.20.1"

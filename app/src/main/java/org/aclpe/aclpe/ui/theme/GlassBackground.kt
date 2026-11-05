@@ -1,6 +1,7 @@
 package org.aclpe.aclpe.ui.theme
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -76,11 +77,19 @@ fun GlassBackground(
     }
 }
 
-private fun loadBackground(context: Context, uri: String?): ImageBitmap? {
-    if (uri.isNullOrBlank()) return null
+private fun loadBackground(context: Context, path: String?): ImageBitmap? {
+    if (path.isNullOrBlank()) return null
     return try {
-        val stream = context.contentResolver.openInputStream(Uri.parse(uri)) ?: return null
-        BitmapFactory.decodeStream(stream)?.asImageBitmap()
+        val bitmap: Bitmap? = if (path.startsWith("/")) {
+            // 本地文件路径（应用私有目录，权限持久）
+            val f = java.io.File(path)
+            if (f.isFile) BitmapFactory.decodeFile(path) else null
+        } else {
+            // content URI（旧数据或复制失败回退）
+            val stream = context.contentResolver.openInputStream(Uri.parse(path)) ?: return null
+            BitmapFactory.decodeStream(stream)
+        }
+        bitmap?.asImageBitmap()
     } catch (_: Throwable) {
         null
     }

@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.aclpe.core.common.result.AppError
@@ -79,9 +81,9 @@ class VersionInstaller(
 
     private val jobs: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
 
-    /** 拉取版本清单：主用所选镜像，失败按其他可用镜像回退。 */
+    /** 拉取版本清单：主用所选镜像（AUTO 时自动测速），失败按其他可用镜像回退。 */
     suspend fun loadManifest(): AppResult<VersionManifestV2> {
-        val preferred: MirrorId = originMirror()
+        val preferred: MirrorId = resolveMirror()
         val candidates: List<String> = (listOf(preferred) + MirrorRegistry.originMirrors().map { it.id })
             .distinct()
             .map { MirrorRegistry.rewrite(MANIFEST_URL, it) }
@@ -110,8 +112,8 @@ class VersionInstaller(
             _states.update { it + (id to state) }
             var phaseStartedAt: Long = System.nanoTime() / 1_000_000L
             try {
-                // 安装开始即锁定镜像（用户此刻的选择作用于整个安装过程）
-                val mirror: MirrorId = originMirror()
+                // 安装开始即锁定镜像（用户此刻的选择作用于整个安装过程；AUTO 时自动测速）
+                val mirror: MirrorId = resolveMirror()
                 Timber.i("version install start: %s mirror=%s", id, mirror)
 
                 // 1. 版本 json
@@ -180,6 +182,14 @@ class VersionInstaller(
     }
 
     fun stateOf(id: String): InstallState? = _states.value[id]
+
+    /** 取消下载/安装（2026-11：下载取消选项）。 */
+    fun cancel(id: String) {
+        jobs[id]?.cancel()
+        jobs.remove(id)
+        _states.update { it + (id to InstallState(id, Phase.FAILED, errorCode = "cancelled")) }
+        Timber.i("version install cancelled: %s", id)
+    }
 
     // ---- 步骤实现 ----
 
@@ -369,6 +379,32 @@ class VersionInstaller(
 
     private fun officialLibraryUrl(path: String): String = "https://libraries.minecraft.net/$path"
 
+    /** 解析实际使用的镜像：AUTO 时自动测速选最快线路，否则用配置值。 */
+    private suspend fun resolveMirror(): MirrorId {
+        val configured: MirrorId = originMirror()
+        return if (configured == MirrorId.AUTO) pickFastestMirror() else configured
+    }
+
+    /** 自动测速：并发探测各候选镜像，第一个成功响应的胜出；全部失败回退 BMCLAPI。 */
+    private suspend fun pickFastestMirror(): MirrorId = coroutineScope {
+        val candidates: List<MirrorId> = MirrorRegistry.speedTestCandidates()
+        if (candidates.isEmpty()) return@coroutineScope MirrorId.OFFICIAL
+        val winner: CompletableDeferred<MirrorId> = CompletableDeferred()
+        candidates.forEach { mirror ->
+            launch {
+                val url: String = MirrorRegistry.rewrite(MANIFEST_URL, mirror)
+                val ok: Boolean = try {
+                    val req: Request = Request.Builder().url(url).header("User-Agent", UA).build()
+                    client.newCall(req).execute().use { it.isSuccessful }
+                } catch (_: Throwable) {
+                    false
+                }
+                if (ok) winner.complete(mirror)
+            }
+        }
+        withTimeoutOrNull(SPEED_TEST_TIMEOUT_MS) { winner.await() } ?: MirrorId.BMCLAPI
+    }
+
     private suspend fun fetchText(url: String): AppResult<String> = try {
         val request: Request = Request.Builder().url(url).header("User-Agent", UA).build()
         client.newCall(request).execute().use { response ->
@@ -402,5 +438,8 @@ class VersionInstaller(
 
         /** UI 进度上报节流（毫秒）：避免数千次 StateFlow 更新造成 UI 抖动。 */
         const val PROGRESS_THROTTLE_MS: Long = 200L
+
+        /** 自动测速超时（毫秒）：超时未决出最快镜像则回退 BMCLAPI。 */
+        const val SPEED_TEST_TIMEOUT_MS: Long = 5_000L
     }
 }

@@ -159,4 +159,9 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
             )
         }
     }
+
+    /** 取消版本下载/安装（2026-11：下载取消选项）。 */
+    fun cancel(versionId: String) {
+        installer.cancel(versionId)
+    }
 }

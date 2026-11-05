@@ -68,6 +68,7 @@
     <string name="versions_cat_release">正式版</string>
     <string name="versions_cat_april">愚人节版</string>
     <string name="versions_cat_snapshot">测试版（快照/旧版）</string>
+    <string name="versions_cancel">取消</string>
     <string name="versions_search_hint">搜索版本（如 1.20.1）</string>
     <string name="versions_loading">正在获取版本清单（BMCLAPI 优先）…</string>
     <string name="versions_error">清单获取失败：%1$s</string>

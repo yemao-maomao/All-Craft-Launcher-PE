@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.aclpe.core.ThemeMode
@@ -155,7 +157,11 @@ private fun PclRightPanel(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent) {
+        TabRow(
+            selectedTabIndex = tab.ordinal,
+            containerColor = Color.Transparent,
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
             PclTab.entries.forEach { t ->
                 Tab(
                     selected = tab == t,

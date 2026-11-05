@@ -164,6 +164,14 @@ class ModLoaderInstaller(
 
     fun stateOf(id: String): InstallState? = _states.value[id]
 
+    /** 取消加载器安装（2026-11：下载取消选项）。 */
+    fun cancel(id: String) {
+        jobs[id]?.cancel()
+        jobs.remove(id)
+        _states.update { it + (id to InstallState(id, Phase.FAILED, errorCode = "cancelled")) }
+        Timber.i("mod loader install cancelled: %s", id)
+    }
+
     fun versionIdOf(kind: ModLoaderKind, loaderVersion: String, gameVersion: String): String = when (kind) {
         ModLoaderKind.FABRIC -> "fabric-loader-$loaderVersion-$gameVersion"
         ModLoaderKind.QUILT -> "quilt-loader-$loaderVersion-$gameVersion"

@@ -2,7 +2,9 @@ package org.aclpe.aclpe.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,11 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +35,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,6 +64,7 @@ fun CommunityScreen(viewModel: CommunityViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val selected: ModrinthProject? = state.selected
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -95,6 +104,21 @@ fun CommunityScreen(viewModel: CommunityViewModel) {
                     }
                 }
             }
+            // 模组分类筛选（Modrinth categories）
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            ) {
+                MOD_CATEGORIES.forEach { (cat, label) ->
+                    FilterChip(
+                        selected = selectedCategory == cat,
+                        onClick = { selectedCategory = cat },
+                        label = { Text(label) },
+                    )
+                }
+            }
+
             // 安装目标版本（模组装进哪里）
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -138,8 +162,10 @@ fun CommunityScreen(viewModel: CommunityViewModel) {
                 if (state.searching) {
                     Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) { CircularProgressIndicator() }
                 } else {
+                    val filteredHits = if (selectedCategory == null) state.hits
+                    else state.hits.filter { p -> p.categories.contains(selectedCategory) }
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.hits, key = { it.project_id ?: it.slug ?: it.title.orEmpty() }) { project: ModrinthProject ->
+                        items(filteredHits, key = { it.project_id ?: it.slug ?: it.title.orEmpty() }) { project: ModrinthProject ->
                             ProjectCard(project = project, onClick = { viewModel.select(project) })
                         }
                     }
@@ -298,19 +324,43 @@ private fun ProjectCard(project: ModrinthProject, onClick: () -> Unit) {
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = project.title ?: project.slug ?: "?", style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = project.description.orEmpty(),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-            )
-            Text(
-                text = "↓ ${project.downloads ?: 0}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 图标占位（首字母圆形，无需网络图片加载）
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = (project.title ?: project.slug ?: "?").take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = project.title ?: project.slug ?: "?", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = project.description.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+                if (project.categories.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = project.categories.take(3).joinToString(" / "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+                Text(
+                    text = "↓ ${project.downloads ?: 0}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }
@@ -354,3 +404,17 @@ private fun ModVersionCard(version: ModrinthVersion, progress: Float?, onInstall
         }
     }
 }
+
+/** 模组分类（Modrinth categories → 中文，null = 全部）。 */
+private val MOD_CATEGORIES: List<Pair<String?, String>> = listOf(
+    null to "全部",
+    "optimization" to "优化",
+    "decoration" to "装饰",
+    "magic" to "魔法",
+    "technology" to "科技",
+    "adventure" to "冒险",
+    "utility" to "实用",
+    "equipment" to "装备",
+    "food" to "食物",
+    "worldgen" to "世界生成",
+)

@@ -10,7 +10,7 @@ package org.aclpe.core.download.mirror
  * 用途分类：[MirrorKind.ORIGIN] 用于原版资源与加载器；[MirrorKind.COMMUNITY] 用于社区资源（Modrinth）。
  */
 enum class MirrorId {
-    OFFICIAL, BMCLAPI, MCIMIRROR, GITEE,
+    OFFICIAL, BMCLAPI, HKMC, MCIMIRROR, GITEE, AUTO,
 }
 
 enum class MirrorKind { ORIGIN, COMMUNITY }
@@ -25,8 +25,10 @@ data class MirrorSource(
 object MirrorRegistry {
 
     val sources: List<MirrorSource> = listOf(
-        MirrorSource(MirrorId.OFFICIAL, "官方源", enabled = true, kind = MirrorKind.ORIGIN),
+        MirrorSource(MirrorId.AUTO, "自动测速（推荐）", enabled = true, kind = MirrorKind.ORIGIN),
         MirrorSource(MirrorId.BMCLAPI, "BMCLAPI 镜像", enabled = true, kind = MirrorKind.ORIGIN),
+        MirrorSource(MirrorId.HKMC, "HKMC 镜像", enabled = true, kind = MirrorKind.ORIGIN),
+        MirrorSource(MirrorId.OFFICIAL, "官方源", enabled = true, kind = MirrorKind.ORIGIN),
         MirrorSource(MirrorId.OFFICIAL, "Modrinth 官方", enabled = true, kind = MirrorKind.COMMUNITY),
         MirrorSource(MirrorId.MCIMIRROR, "MCMirror 镜像", enabled = true, kind = MirrorKind.COMMUNITY),
         MirrorSource(MirrorId.GITEE, "Gitee 镜像（端点待定）", enabled = false, kind = MirrorKind.ORIGIN),
@@ -37,6 +39,10 @@ object MirrorRegistry {
     /** 原版/加载器可选镜像（设置页"下载镜像"）。 */
     fun originMirrors(): List<MirrorSource> = sources.filter { it.enabled && it.kind == MirrorKind.ORIGIN }
 
+    /** 参与自动测速的原版镜像候选（AUTO 除外）。 */
+    fun speedTestCandidates(): List<MirrorId> =
+        originMirrors().map { it.id }.filter { it != MirrorId.AUTO && it != MirrorId.GITEE }
+
     /** 社区资源可选镜像（设置页"社区镜像"）。 */
     fun communityMirrors(): List<MirrorSource> = sources.filter { it.enabled && it.kind == MirrorKind.COMMUNITY }
 
@@ -46,8 +52,9 @@ object MirrorRegistry {
     fun rewrite(url: String, mirror: MirrorId): String = when (mirror) {
         MirrorId.OFFICIAL -> url
         MirrorId.BMCLAPI -> rewriteBmclapi(url)
+        MirrorId.HKMC -> rewriteHkmc(url)
         MirrorId.MCIMIRROR -> rewriteMcimirror(url)
-        MirrorId.GITEE -> url
+        MirrorId.GITEE, MirrorId.AUTO -> url
     }
 
     /** BMCLAPI：原版元数据/下载域 + Fabric Meta 反代（Quilt 无镜像，实测 404 → 原样）。 */
@@ -72,6 +79,26 @@ object MirrorRegistry {
 
         url.startsWith("https://maven.fabricmc.net") ->
             url.replaceFirst("https://maven.fabricmc.net", "https://bmclapi2.bangbang93.com/maven")
+
+        else -> url
+    }
+
+    /** HKMC：原版元数据/下载域（BMCLAPI 同方式，实测 mirror.hkmc.online 可用）。 */
+    private fun rewriteHkmc(url: String): String = when {
+        url.startsWith("https://launchermeta.mojang.com") ->
+            url.replaceFirst("https://launchermeta.mojang.com", "https://mirror.hkmc.online")
+
+        url.startsWith("https://piston-meta.mojang.com") ->
+            url.replaceFirst("https://piston-meta.mojang.com", "https://mirror.hkmc.online")
+
+        url.startsWith("https://piston-data.mojang.com") ->
+            url.replaceFirst("https://piston-data.mojang.com", "https://mirror.hkmc.online")
+
+        url.startsWith("https://libraries.minecraft.net") ->
+            url.replaceFirst("https://libraries.minecraft.net", "https://mirror.hkmc.online/maven")
+
+        url.startsWith("https://resources.download.minecraft.net") ->
+            url.replaceFirst("https://resources.download.minecraft.net", "https://mirror.hkmc.online/assets")
 
         else -> url
     }

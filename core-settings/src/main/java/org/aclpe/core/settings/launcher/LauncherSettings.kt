@@ -25,8 +25,8 @@ data class PerformanceSwitches(
 data class LauncherSettings(
     val memoryTier: String = "MEDIUM",
     val extraJvmArgs: String = "",
-    /** 原版下载镜像（OFFICIAL / BMCLAPI）：版本安装与加载器安装使用（默认 BMCLAPI，国内快）。 */
-    val mirrorId: String = "BMCLAPI",
+    /** 原版下载镜像（AUTO 自动测速 / OFFICIAL / BMCLAPI / HKMC）。默认 AUTO。 */
+    val mirrorId: String = "AUTO",
     /** 社区资源镜像（OFFICIAL / MCIMIRROR）：Modrinth 搜索与版本列表使用。 */
     val communityMirrorId: String = "OFFICIAL",
     val proxy: String = "",
@@ -41,7 +41,7 @@ object LauncherSettingsValidator {
 
     fun validate(settings: LauncherSettings): LauncherSettings? {
         val tierOk: Boolean = settings.memoryTier in setOf("LIGHT", "MEDIUM", "HIGH", "EXTREME")
-        val mirrorOk: Boolean = settings.mirrorId in setOf("OFFICIAL", "BMCLAPI")
+        val mirrorOk: Boolean = settings.mirrorId in setOf("AUTO", "OFFICIAL", "BMCLAPI", "HKMC")
         val communityMirrorOk: Boolean = settings.communityMirrorId in setOf("OFFICIAL", "MCIMIRROR")
         val jreOk: Boolean = settings.jreMajorOverride == null || settings.jreMajorOverride in setOf(8, 17, 21, 25)
         val proxyOk: Boolean = settings.proxy.isEmpty() ||

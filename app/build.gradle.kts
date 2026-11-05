@@ -15,8 +15,8 @@ android {
         applicationId = "org.aclpe.aclpe"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 10
-        versionName = "0.1.3"
+        versionCode = 11
+        versionName = "0.1.4"
 
         // 硬性约束：arm64 only。32 位设备在安装期即被拒绝（APK ABI 过滤），另有运行时 AbiGuard 兜底。
         ndk {

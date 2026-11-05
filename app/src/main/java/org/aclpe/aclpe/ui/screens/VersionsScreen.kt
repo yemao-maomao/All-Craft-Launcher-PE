@@ -96,6 +96,7 @@ fun VersionsScreen(viewModel: VersionsViewModel) {
                 versions = categorized[VersionCategory.RELEASE].orEmpty(),
                 state = state,
                 onInstall = viewModel::install,
+                onCancel = viewModel::cancel,
             )
             categoryBlock(
                 title = aprilTitle,
@@ -104,6 +105,7 @@ fun VersionsScreen(viewModel: VersionsViewModel) {
                 versions = categorized[VersionCategory.APRIL_FOOLS].orEmpty(),
                 state = state,
                 onInstall = viewModel::install,
+                onCancel = viewModel::cancel,
             )
             categoryBlock(
                 title = snapshotTitle,
@@ -112,6 +114,7 @@ fun VersionsScreen(viewModel: VersionsViewModel) {
                 versions = categorized[VersionCategory.SNAPSHOT].orEmpty(),
                 state = state,
                 onInstall = viewModel::install,
+                onCancel = viewModel::cancel,
             )
         }
     }
@@ -125,6 +128,7 @@ private fun LazyListScope.categoryBlock(
     versions: List<ManifestVersion>,
     state: VersionsViewModel.UiState,
     onInstall: (ManifestVersion) -> Unit,
+    onCancel: (String) -> Unit,
 ) {
     item(key = "header-$title") {
         Row(
@@ -153,6 +157,7 @@ private fun LazyListScope.categoryBlock(
                 installed = version.id in state.installedIds,
                 installState = state.installing[version.id],
                 onInstall = { onInstall(version) },
+                onCancel = { onCancel(version.id) },
             )
         }
     }
@@ -164,6 +169,7 @@ private fun VersionCard(
     installed: Boolean,
     installState: VersionInstaller.InstallState?,
     onInstall: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     // PCL 风格：半透明圆角卡片，融入液态玻璃背景
     Card(
@@ -187,12 +193,24 @@ private fun VersionCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    installState != null && installState.phase != VersionInstaller.Phase.FAILED ->
+                    installState != null && installState.phase !in setOf(
+                        VersionInstaller.Phase.IDLE,
+                        VersionInstaller.Phase.DONE,
+                        VersionInstaller.Phase.FAILED,
+                    ) -> Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = phaseLabel(installState),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        TextButton(onClick = onCancel) {
+                            Text(
+                                text = stringResource(R.string.versions_cancel),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                     else -> TextButton(onClick = onInstall) {
                         Text(stringResource(R.string.env_action_install))
                     }
