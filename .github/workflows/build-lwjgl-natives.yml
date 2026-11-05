@@ -1,6 +1,6 @@
 name: Build LWJGL Android Natives
 
-# 编译 LWJGL 的 arm64 Android natives（liblwjgl.so / liblwjgl_opengl.so 等 8 个 .so）。
+# 编译 LWJGL 的 arm64 Android natives（liblwjgl.so / liblwjgl_opengl.so / liblwjgl_stb.so）。
 # 仿造 FCL-Team/LWJGL-Pojav 的 ci_build_android.bash（BSD 许可开源库，非 FCL 源码）。
 # 本机 Windows 无法编译（LWJGL 构建依赖 bash/ant/configure/make + Linux 版 NDK），
 # 故此流程在 Linux runner 上执行，产物作为 artifact 下载后集成到 ACL-PE。
@@ -25,17 +25,37 @@ jobs:
 
       - name: Setup Android NDK (Linux)
         run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
           unzip -q android-ndk-r27-linux.zip
           echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r27" >> "$GITHUB_ENV"
+
+      - name: Patch ci script (skip stale downloads)
+        working-directory: LWJGL-Pojav
+        run: |
+          # libopenal.so 已从 FCL 仓库移除（改为 openal-soft-release.aar），原 wget 会 404 退出码 8
+          # 故删除该下载并禁用 openal 绑定（openal 后续从 openal-soft 源码单独编译）
+          python3 - <<'PY'
+          import re
+          with open('ci_build_android.bash') as f:
+              c = f.read()
+          c = re.sub(r'.*wget.*libopenal\.so.*\n', '', c)
+          c = c.replace(
+              'yes | ant -Dplatform.linux=true',
+              'yes | ant -Dplatform.linux=true -Dbinding.openal=false'
+          )
+          with open('ci_build_android.bash', 'w') as f:
+              f.write(c)
+          print('patched ci_build_android.bash')
+          PY
 
       - name: Build natives (arm64)
         working-directory: LWJGL-Pojav
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_HOME"
           export LWJGL_BUILD_ARCH=arm64
-          # libffi 可选（Minecraft 1.20.1 不需要）；如需可去掉 SKIP_LIBFFI
           export SKIP_LIBFFI=1
+          export SKIP_FREETYPE=1
+          # 不静默，便于失败时定位
           bash ci_build_android.bash
 
       - name: Upload natives
