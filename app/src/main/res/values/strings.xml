@@ -15,6 +15,16 @@
     <string name="legal_accept_continue">同意并继续</string>
     <string name="legal_contact">联系方式：%1$s</string>
 
+    <string name="settings_ui_custom">界面自定义</string>
+    <string name="settings_background_image">背景图像</string>
+    <string name="settings_background_default">当前使用内置默认背景</string>
+    <string name="settings_background_custom">已使用自定义背景</string>
+    <string name="settings_background_pick">选择图片</string>
+    <string name="settings_background_reset">恢复默认背景</string>
+    <string name="settings_background_alpha">背景不透明度（%1$d%%）</string>
+    <string name="settings_liquid_glass">液态玻璃（毛玻璃模糊）</string>
+    <string name="settings_liquid_glass_desc">Android 12+ 真模糊；旧版本自动降级为半透明。</string>
+
     <!-- 底部导航 -->
     <string name="tab_home">首页</string>
     <string name="tab_versions">版本</string>

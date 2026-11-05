@@ -1,6 +1,7 @@
 package org.aclpe.aclpe.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -42,15 +46,13 @@ import org.aclpe.core.account.model.AccountType
 import org.aclpe.core.env.store.VersionEntity
 
 /**
- * 首页（2026-11-05 仿 FCL 重构）：
- * - 顶部账户区（昵称 + 类型）；
- * - 中央：当前版本名（点击切换）+ 大启动按钮；
- * - 底部环境状态小字（未就绪时门禁提示）；
- * - 版本选择：底部弹层列出已安装版本，点选即切换；含「去下载版本」入口。
+ * PCL 风格左栏启动区（2026-11 重构）：
+ * 账户头像 → 版本名（点击切换）→ 圆形大启动按钮 → 环境状态小字。
+ * 占横屏左半部分（约 38% 宽）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit) {
+fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit, modifier: Modifier = Modifier) {
     val state: HomeViewModel.HomeUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val launchMessage: String? by viewModel.launchMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -63,77 +65,67 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit) {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            // 顶部账户区（FCL 风格）
-            AccountHeader(account = state.account, onNavigateToSettings = null)
-            Spacer(modifier = Modifier.weight(1f))
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        // 账户头像区
+        AccountAvatar(account = state.account)
+        Spacer(modifier = Modifier.height(16.dp))
 
-            // 当前版本名（点击切换）
-            TextButton(onClick = { showVersionPicker = true }) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = state.effectiveVersion?.id ?: stringResource(R.string.home_no_version),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = stringResource(R.string.home_tap_switch_version),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 大启动按钮（FCL 式大方块）
-            Button(
-                onClick = { viewModel.launch() },
-                enabled = state.overallReady,
-                colors = ButtonDefaults.buttonColors(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp),
-            ) {
+        // 版本名（点击切换）
+        TextButton(onClick = { showVersionPicker = true }) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = stringResource(if (state.overallReady) R.string.home_launch_ready else R.string.home_launch_disabled),
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = state.effectiveVersion?.id ?: stringResource(R.string.home_no_version),
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(R.string.home_tap_switch_version),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
 
-            // 环境状态门禁小字
+        // 圆形大启动按钮（PCL 风格）
+        Button(
+            onClick = { viewModel.launch() },
+            enabled = state.overallReady,
+            shape = CircleShape,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+            modifier = Modifier.size(120.dp),
+        ) {
             Text(
-                text = if (state.overallReady) {
-                    stringResource(R.string.env_status_ready)
-                } else {
-                    envStatusLine(state)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (state.overallReady) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                text = stringResource(if (state.overallReady) R.string.home_launch_ready else R.string.home_launch_disabled),
+                style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
             )
-            if (!state.overallReady) {
-                Spacer(modifier = Modifier.height(4.dp))
-                TextButton(
-                    onClick = {
-                        state.envItems
-                            .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
-                            .forEach { viewModel.install(it.slot) }
-                    },
-                ) {
-                    Text(stringResource(R.string.home_retry_env))
-                }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 环境状态
+        Text(
+            text = if (state.overallReady) stringResource(R.string.env_status_ready) else envStatusLine(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.overallReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (!state.overallReady) {
+            TextButton(
+                onClick = {
+                    state.envItems
+                        .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
+                        .forEach { viewModel.install(it.slot) }
+                },
+            ) {
+                Text(stringResource(R.string.home_retry_env))
             }
-            Spacer(modifier = Modifier.weight(1f))
         }
     }
 
@@ -154,27 +146,36 @@ fun HomeScreen(viewModel: HomeViewModel, onNavigateToVersions: () -> Unit) {
     }
 }
 
+/** 账户圆形头像（占位：显示用户名首字符）。 */
 @Composable
-private fun AccountHeader(account: Account?, onNavigateToSettings: (() -> Unit)?) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+private fun AccountAvatar(account: Account?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
             Text(
-                text = account?.username ?: stringResource(R.string.home_account_none),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = when (account?.type) {
-                    AccountType.LOCAL_OFFLINE -> stringResource(R.string.account_type_offline)
-                    AccountType.MICROSOFT -> stringResource(R.string.account_type_microsoft)
-                    null -> stringResource(R.string.home_account_hint)
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = account?.username?.take(1)?.uppercase() ?: "?",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = account?.username ?: stringResource(R.string.home_account_none),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = when (account?.type) {
+                AccountType.LOCAL_OFFLINE -> stringResource(R.string.account_type_offline)
+                AccountType.MICROSOFT -> stringResource(R.string.account_type_microsoft)
+                null -> stringResource(R.string.home_account_hint)
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -185,10 +186,7 @@ private fun VersionPickerSheet(
     onNavigateToVersions: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = stringResource(R.string.home_select_version),
-            style = MaterialTheme.typography.titleMedium,
-        )
+        Text(text = stringResource(R.string.home_select_version), style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
         if (state.installedVersions.isEmpty()) {
             Text(
@@ -207,10 +205,7 @@ private fun VersionPickerSheet(
                             .padding(vertical = 2.dp)
                             .clickable { onSelect(version.id) },
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = version.id, style = MaterialTheme.typography.bodyLarge)
                                 Text(
@@ -239,15 +234,11 @@ private fun VersionPickerSheet(
     }
 }
 
-/** 环境未就绪时，展示哪些槽位还没好（简洁一行）。 */
 @Composable
 private fun envStatusLine(state: HomeViewModel.HomeUiState): String {
     val notReady: List<String> = state.envItems
         .filter { it.phase != SimpleRuntimeInstaller.Phase.READY }
         .map { it.label }
-    return if (notReady.isEmpty()) {
-        stringResource(R.string.env_status_ready)
-    } else {
-        "环境未就绪：${notReady.joinToString("、")}（点击下方版本页无关，环境在首次启动自动安装，失败可在此重试）"
-    }
+    return if (notReady.isEmpty()) stringResource(R.string.env_status_ready)
+    else "环境未就绪：${notReady.joinToString("、")}"
 }

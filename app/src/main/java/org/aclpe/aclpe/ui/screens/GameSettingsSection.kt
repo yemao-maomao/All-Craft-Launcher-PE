@@ -64,15 +64,6 @@ fun GameSettingsSection(viewModel: GameSettingsViewModel) {
             },
         )
 
-        SectionTitle(stringResource(R.string.gs_group_sound))
-        GameOptionKeys.SOUND_KEYS.forEach { key ->
-            val label: String = stringResource(R.string.gs_group_sound) + "·" + key.removePrefix("soundCategory_")
-            SliderRow(
-                label = label,
-                value = (options[key]?.toFloatOrNull() ?: 1f).coerceIn(0f, 1f),
-            ) { v -> viewModel.updateOption(key, v.toString()) }
-        }
-
         SectionTitle(stringResource(R.string.gs_group_other))
         TextFieldRow("语言", options[GameOptionKeys.LANG] ?: "zh_cn") { viewModel.updateOption(GameOptionKeys.LANG, it) }
         SwitchRow("强制 Unicode 字体", options[GameOptionKeys.FORCE_UNICODE_FONT] == "true") { viewModel.updateOption(GameOptionKeys.FORCE_UNICODE_FONT, it.toString()) }

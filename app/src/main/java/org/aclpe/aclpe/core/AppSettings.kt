@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,6 +28,15 @@ object AppSettingsKeys {
 
     /** 当前选中的游戏版本 id（首页启动按钮的目标版本；null = 尚未选择）。 */
     val SELECTED_VERSION_ID: Preferences.Key<String> = stringPreferencesKey("selected_version_id")
+
+    /** 液态玻璃背景图 URI（用户从相册选择；null = 使用内置默认背景）。 */
+    val BACKGROUND_IMAGE_URI: Preferences.Key<String> = stringPreferencesKey("background_image_uri")
+
+    /** 背景层不透明度（0.0~1.0，1.0=完全不透明盖住内容，0=全透明看不到背景）。默认 0.85。 */
+    val BACKGROUND_ALPHA: Preferences.Key<Float> = floatPreferencesKey("background_alpha")
+
+    /** 是否启用液态玻璃（毛玻璃模糊）效果；API<31 时自动降级为半透明无真模糊。 */
+    val LIQUID_GLASS_ENABLED: Preferences.Key<Boolean> = booleanPreferencesKey("liquid_glass_enabled")
 }
 
 enum class ThemeMode {
@@ -62,6 +72,18 @@ class AppSettings(private val context: Context) {
     val selectedVersionId: Flow<String?> =
         context.appSettingsDataStore.data.map { it[AppSettingsKeys.SELECTED_VERSION_ID] }
 
+    /** 液态玻璃背景图 URI（null = 内置默认背景）。 */
+    val backgroundImageUri: Flow<String?> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.BACKGROUND_IMAGE_URI] }
+
+    /** 背景层不透明度（默认 0.85）。 */
+    val backgroundAlpha: Flow<Float> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.BACKGROUND_ALPHA] ?: DEFAULT_BACKGROUND_ALPHA }
+
+    /** 液态玻璃开关（默认开）。 */
+    val liquidGlassEnabled: Flow<Boolean> =
+        context.appSettingsDataStore.data.map { it[AppSettingsKeys.LIQUID_GLASS_ENABLED] ?: true }
+
     suspend fun setCrashCaptureEnabled(value: Boolean) {
         context.appSettingsDataStore.edit { it[AppSettingsKeys.CRASH_CAPTURE_ENABLED] = value }
     }
@@ -92,5 +114,29 @@ class AppSettings(private val context: Context) {
             if (versionId == null) prefs.remove(AppSettingsKeys.SELECTED_VERSION_ID)
             else prefs[AppSettingsKeys.SELECTED_VERSION_ID] = versionId
         }
+    }
+
+    /** 设置背景图 URI（null = 恢复内置默认背景）。 */
+    suspend fun setBackgroundImageUri(uri: String?) {
+        context.appSettingsDataStore.edit { prefs ->
+            if (uri == null) prefs.remove(AppSettingsKeys.BACKGROUND_IMAGE_URI)
+            else prefs[AppSettingsKeys.BACKGROUND_IMAGE_URI] = uri
+        }
+    }
+
+    /** 设置背景层不透明度（0.0~1.0）。 */
+    suspend fun setBackgroundAlpha(alpha: Float) {
+        context.appSettingsDataStore.edit { prefs ->
+            prefs[AppSettingsKeys.BACKGROUND_ALPHA] = alpha.coerceIn(0f, 1f)
+        }
+    }
+
+    /** 设置液态玻璃开关。 */
+    suspend fun setLiquidGlassEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { prefs -> prefs[AppSettingsKeys.LIQUID_GLASS_ENABLED] = enabled }
+    }
+
+    companion object {
+        const val DEFAULT_BACKGROUND_ALPHA: Float = 0.85f
     }
 }

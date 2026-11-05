@@ -1,6 +1,9 @@
 package org.aclpe.aclpe.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +64,12 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = true)
     val developerMode: Boolean by appSettings.developerMode
         .collectAsStateWithLifecycle(initialValue = false)
+    val bgUri: String? by appSettings.backgroundImageUri
+        .collectAsStateWithLifecycle(initialValue = null)
+    val bgAlpha: Float by appSettings.backgroundAlpha
+        .collectAsStateWithLifecycle(initialValue = AppSettings.DEFAULT_BACKGROUND_ALPHA)
+    val glassEnabled: Boolean by appSettings.liquidGlassEnabled
+        .collectAsStateWithLifecycle(initialValue = true)
     val activeAccount: Account? by accountViewModel.activeAccount.collectAsStateWithLifecycle()
     val accountMessage: String? by accountViewModel.message.collectAsStateWithLifecycle()
     val gameSettingsState by gameSettingsViewModel.uiState.collectAsStateWithLifecycle()
@@ -107,6 +117,74 @@ fun SettingsScreen(
                     label = { Text(stringResource(mode.labelRes())) },
                 )
             }
+        }
+
+        // 界面自定义（PCL 风格液态玻璃背景，2026-11 重构）
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = stringResource(R.string.settings_ui_custom),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val pickImage = rememberLauncherForActivityResult(
+            ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            if (uri != null) scope.launch { appSettings.setBackgroundImageUri(uri.toString()) }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_background_image),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = if (bgUri == null) stringResource(R.string.settings_background_default)
+                    else stringResource(R.string.settings_background_custom),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = {
+                pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }) {
+                Text(stringResource(R.string.settings_background_pick))
+            }
+        }
+        if (bgUri != null) {
+            TextButton(onClick = { scope.launch { appSettings.setBackgroundImageUri(null) } }) {
+                Text(stringResource(R.string.settings_background_reset))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_background_alpha, (bgAlpha * 100).toInt()),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Slider(
+            value = bgAlpha,
+            onValueChange = { scope.launch { appSettings.setBackgroundAlpha(it) } },
+            valueRange = 0f..1f,
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_liquid_glass),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = stringResource(R.string.settings_liquid_glass_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = glassEnabled,
+                onCheckedChange = { scope.launch { appSettings.setLiquidGlassEnabled(it) } },
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

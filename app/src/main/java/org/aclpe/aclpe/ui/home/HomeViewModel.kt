@@ -121,33 +121,65 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _launchMessage = MutableStateFlow<String?>(null)
     val launchMessage: StateFlow<String?> = _launchMessage
 
+    /** 游戏是否运行中（右侧栏切日志视图用）。 */
+    private val _running = MutableStateFlow(false)
+    val running: StateFlow<Boolean> = _running
+
+    /** 运行日志（内存环形缓冲；退出后由 UI 层触发保存到 Downloads）。 */
+    private val _logLines = MutableStateFlow<List<String>>(emptyList())
+    val logLines: StateFlow<List<String>> = _logLines
+
     fun consumeLaunchMessage() {
         _launchMessage.value = null
     }
 
+    /** 追加一行运行日志（带时间戳）。 */
+    private fun log(line: String) {
+        val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+        _logLines.value = (_logLines.value + "[$ts] $line").takeLast(MAX_LOG_LINES)
+    }
+
+    /** 清空日志（新一次启动前调用）。 */
+    fun clearLog() {
+        _logLines.value = emptyList()
+    }
+
     fun launch() {
         viewModelScope.launch(Dispatchers.IO) {
+            clearLog()
+            _running.value = true
+            log("正在启动「${uiState.value.effectiveVersion?.id ?: "?"}」…")
             if (!uiState.value.overallReady) {
+                log("失败：环境未就绪（Java 运行环境未安装）")
                 _launchMessage.value = "环境未就绪：请先完成 Java 运行环境安装"
+                _running.value = false
                 return@launch
             }
             val account: Account = deps.accountRepository.activeAccount(AccountViewModel.PROFILE_ID).getOrNull()
                 ?: run {
+                    log("失败：未创建账号")
                     _launchMessage.value = "请先在「设置 → 账号」创建账号"
+                    _running.value = false
                     return@launch
                 }
+            log("账号：${account.username}（${if (account.type == AccountType.LOCAL_OFFLINE) "离线" else "微软"}）")
             val installed: VersionEntity? = uiState.value.effectiveVersion
             if (installed == null) {
+                log("失败：尚未安装游戏版本")
                 _launchMessage.value = "尚未安装游戏版本：请到「版本」页下载"
+                _running.value = false
                 return@launch
             }
+            log("版本：${installed.id}（Java ${installed.javaMajor ?: 17}+）")
             val profileDir: File = File(deps.layout.root, "runtimes/${AccountViewModel.PROFILE_ID}")
             val versionJsonFile: File = File(profileDir, "versions/${installed.id}/${installed.id}.json")
             val versionJson: VersionJson = versionJsonFile.takeIf { it.isFile }
                 ?.readText()
                 ?.let { VersionJsonParser.parseVersionJson(it).getOrNull() }
                 ?: run {
+                    log("失败：版本元数据缺失")
                     _launchMessage.value = "版本元数据缺失，请重新安装「${installed.id}」"
+                    _running.value = false
                     return@launch
                 }
             val session: AuthSession = deps.accountRepository.activeSession(AccountViewModel.PROFILE_ID).getOrNull()
@@ -171,11 +203,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 memoryTier = MemoryTier.MEDIUM,
                 deviceMemoryMb = 2048,
             )
+            log("正在生成启动计划…")
             val plan = deps.launchPlanBuilder.build(context)
             if (plan.isErr) {
-                _launchMessage.value = "启动计划生成失败：${plan.errorOrNull()?.code}"
+                val msg: String = plan.errorOrNull()?.message ?: plan.errorOrNull()?.code ?: "unknown"
+                log("启动计划生成失败：$msg")
+                _launchMessage.value = "启动计划生成失败：$msg"
+                _running.value = false
                 return@launch
             }
+            log("启动计划就绪，正在启动进程…")
             val start = deps.gameProcessStarter.start(
                 plan.getOrNull()!!,
                 stdoutLog = File(profileDir, "logs/game-stdout.log"),
@@ -183,24 +220,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             )
             if (start.isOk) {
                 org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(true)
+                log("游戏进程已启动")
                 _launchMessage.value = "游戏进程已启动"
                 val process: org.aclpe.core.launch.process.GameProcess = start.getOrNull()!!
                 viewModelScope.launch(Dispatchers.IO) {
                     val exit: Int = process.waitFor()
                     org.aclpe.aclpe.core.env.GameProcessRegistry.markRunning(false)
+                    _running.value = false
+                    log("游戏已退出（退出码 $exit）")
                     Timber.i("game exited: code=%d", exit)
                 }
             } else {
                 // 真机 W^X：ProcessBuilder 执行应用数据目录内 java 二进制会被系统拒绝（IOException）。
-                // 这是已知设备级限制，友好提示而非抛出难懂错误码。
                 val code: String = start.errorOrNull()?.code ?: "unknown"
+                log(if (code == "game_process_start_failed") {
+                    "启动失败：Android 系统安全策略禁止直接运行 Java（W^X），JNI 启动引擎开发中"
+                } else {
+                    "启动失败：$code"
+                })
                 _launchMessage.value = if (code == "game_process_start_failed") {
                     "环境/版本/账号均已就绪，但当前 Android 系统安全策略禁止直接运行 Java（W^X）。" +
                         "完整启动引擎（JNI 进程内 JVM，FCL 同款）开发中——此为本应用最后一块待接入能力。"
                 } else {
                     "启动失败：$code"
                 }
+                _running.value = false
             }
         }
+    }
+
+    companion object {
+        const val MAX_LOG_LINES: Int = 500
     }
 }
