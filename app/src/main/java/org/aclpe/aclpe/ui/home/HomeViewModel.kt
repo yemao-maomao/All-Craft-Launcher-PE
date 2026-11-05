@@ -239,19 +239,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     _running.value = false
                     return@launch
                 }
-                // 1.5 部署 gl4es 渲染桥（libGL.so.1）到 natives 目录，供 LWJGL 经 LD_LIBRARY_PATH 加载
+                // 1.5 部署 native 库（gl4es libGL.so.1 + 后续 LWJGL/SDL 等）到 natives 目录，
+                //     供 LWJGL 经 LD_LIBRARY_PATH 加载
                 val nativesDir: File = File(profileDir, "natives")
                 nativesDir.mkdirs()
-                val gl4esLib: File = File(nativesDir, "libGL.so.1")
-                if (!gl4esLib.isFile) {
-                    try {
-                        getApplication<Application>().assets.open("natives/arm64-v8a/libGL.so.1").use { input ->
-                            gl4esLib.outputStream().use { output -> input.copyTo(output) }
+                try {
+                    val assets = getApplication<Application>().assets
+                    val nativeNames: Array<String> = assets.list("natives/arm64-v8a") ?: emptyArray()
+                    nativeNames.forEach { name: String ->
+                        val dest = File(nativesDir, name)
+                        if (!dest.isFile) {
+                            assets.open("natives/arm64-v8a/$name").use { input ->
+                                dest.outputStream().use { output -> input.copyTo(output) }
+                            }
                         }
-                        log("已部署 gl4es libGL.so.1（OpenGL→GLES 渲染桥）")
-                    } catch (t: Throwable) {
-                        log("gl4es 资产缺失（无渲染桥，游戏将无法显示画面）: ${t.message}")
                     }
+                    if (nativeNames.isNotEmpty()) {
+                        log("已部署 native 库：${nativeNames.joinToString(", ")}")
+                    }
+                } catch (t: Throwable) {
+                    log("native 库部署失败（无渲染桥，游戏无法显示画面）: ${t.message}")
                 }
                 // 2. 绝对 classpath（JNI 无 cwd 概念，须拼 gameDir 绝对路径）
                 val sep: String = org.aclpe.core.common.platform.OsSpec.SEPARATOR.toString()
