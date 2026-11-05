@@ -95,8 +95,13 @@ class SimpleRuntimeInstaller(
             return SimpleRuntimeInstaller(
                 scope = scope,
                 isReady = { slot: Int ->
-                    // .build 标记 + release 文件带 JAVA_VERSION 行（防半装）
-                    layout.jreBuildMarker(slot).isFile && readReleaseMajor(layout.jreReleaseFile(slot)) != null
+                    // 就绪口径与启动器一致（2026-11-05 修复 jre_binary_missing）：
+                    // 必须 bin/java + libjvm + release 版本行 + .build 标记四者俱在，
+                    // 否则首页显示「未安装」，触发重装——避免「首页就绪、点启动才报 java 缺失」。
+                    layout.jreJavaBinary(slot).isFile &&
+                        layout.jreServerLibCandidates(slot).any { it.isFile && it.length() > 0L } &&
+                        readReleaseMajor(layout.jreReleaseFile(slot)) != null &&
+                        layout.jreBuildMarker(slot).isFile
                 },
                 assetProvider = { slot: Int ->
                     assetCache.fileFor(EnvItemEntity.jre(slot))
