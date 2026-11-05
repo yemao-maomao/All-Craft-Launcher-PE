@@ -65,6 +65,8 @@ class ModLoaderInstaller(
     private val platformContext: PlatformContext = PlatformContext.fromOsSpec(),
     /** 下载镜像（跟随设置的"下载镜像"：BMCLAPI 时使用 Fabric Meta 反代）。 */
     private val originMirror: suspend () -> MirrorId = { MirrorId.OFFICIAL },
+    /** 下载线程数（设置项滑块）：库下载阶段读取当前值。 */
+    private val downloadThreads: () -> Int = { DEFAULT_THREADS },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
@@ -221,7 +223,7 @@ class ModLoaderInstaller(
         onFilesDone: (Int) -> Unit,
     ) = coroutineScope {
         var done: Int = 0
-        val semaphore = Semaphore(CONCURRENCY)
+        val semaphore = Semaphore(downloadThreads().coerceIn(1, 64))
         entries.map { (path: String, url: String) ->
             launch {
                 semaphore.withPermit {
@@ -271,7 +273,7 @@ class ModLoaderInstaller(
     companion object {
         const val UA: String = "ACL-PE/0.0.6 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
 
-        /** 加载器库下载并发（2026-11-03 提速：4 → 8，配合 OkHttp maxRequestsPerHost=32）。 */
-        const val CONCURRENCY: Int = 8
+        /** 默认下载线程数（设置页滑块可动态覆盖 1~32）。 */
+        const val DEFAULT_THREADS: Int = 8
     }
 }

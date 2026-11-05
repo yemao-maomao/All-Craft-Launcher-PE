@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,8 +48,8 @@ import org.aclpe.core.account.model.Account
 import org.aclpe.core.account.model.AccountType
 
 /**
- * 设置页：启动器（主题/崩溃捕获/仅 Wi-Fi 下载）+ 账号区（Step 4）+ 游戏设置区（Step 5）。
- * 离线账户限制明确标注（无皮肤同步、无法联机、可能违反 EULA），绝不做成默认推荐。
+ * 设置页（2026-11 分类可折叠重构）：
+ * 分类：界面 / 启动器 / 下载 / 网络 / 账号 / 游戏，每类可折叠。
  */
 @Composable
 fun SettingsScreen(
@@ -70,6 +71,10 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = AppSettings.DEFAULT_BACKGROUND_ALPHA)
     val glassEnabled: Boolean by appSettings.liquidGlassEnabled
         .collectAsStateWithLifecycle(initialValue = true)
+    val downloadThreads: Int by appSettings.downloadThreads
+        .collectAsStateWithLifecycle(initialValue = AppSettings.DEFAULT_DOWNLOAD_THREADS)
+    val officialEnabled: Boolean by appSettings.officialSiteEnabled
+        .collectAsStateWithLifecycle(initialValue = false)
     val activeAccount: Account? by accountViewModel.activeAccount.collectAsStateWithLifecycle()
     val accountMessage: String? by accountViewModel.message.collectAsStateWithLifecycle()
     val gameSettingsState by gameSettingsViewModel.uiState.collectAsStateWithLifecycle()
@@ -98,264 +103,192 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text(
-            text = stringResource(R.string.settings_section_launcher),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.settings_theme_mode),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ThemeMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = themeMode == mode,
-                    onClick = { scope.launch { appSettings.setThemeMode(mode) } },
-                    label = { Text(stringResource(mode.labelRes())) },
-                )
+        // ---- 界面 ----
+        CollapsibleSection(title = stringResource(R.string.settings_cat_ui), initiallyExpanded = true) {
+            Text(stringResource(R.string.settings_theme_mode), style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = themeMode == mode,
+                        onClick = { scope.launch { appSettings.setThemeMode(mode) } },
+                        label = { Text(stringResource(mode.labelRes())) },
+                    )
+                }
             }
-        }
 
-        // 界面自定义（PCL 风格液态玻璃背景，2026-11 重构）
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(R.string.settings_ui_custom),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val pickImage = rememberLauncherForActivityResult(
-            ActivityResultContracts.PickVisualMedia()
-        ) { uri ->
-            if (uri != null) scope.launch { appSettings.setBackgroundImageUri(uri.toString()) }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_background_image),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = if (bgUri == null) stringResource(R.string.settings_background_default)
-                    else stringResource(R.string.settings_background_custom),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Spacer(modifier = Modifier.height(12.dp))
+            val pickImage = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickVisualMedia()
+            ) { uri ->
+                if (uri != null) scope.launch { appSettings.setBackgroundImageUri(uri.toString()) }
             }
-            TextButton(onClick = {
-                pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            }) {
-                Text(stringResource(R.string.settings_background_pick))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_background_image), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = if (bgUri == null) stringResource(R.string.settings_background_default)
+                        else stringResource(R.string.settings_background_custom),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) {
+                    Text(stringResource(R.string.settings_background_pick))
+                }
             }
-        }
-        if (bgUri != null) {
-            TextButton(onClick = { scope.launch { appSettings.setBackgroundImageUri(null) } }) {
-                Text(stringResource(R.string.settings_background_reset))
+            if (bgUri != null) {
+                TextButton(onClick = { scope.launch { appSettings.setBackgroundImageUri(null) } }) {
+                    Text(stringResource(R.string.settings_background_reset))
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        val alphaLocal = remember { mutableStateOf(bgAlpha) }
-        LaunchedEffect(bgAlpha) { alphaLocal.value = bgAlpha }
-        Text(
-            text = stringResource(R.string.settings_background_alpha, (alphaLocal.value * 100).toInt()),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Slider(
-            value = alphaLocal.value,
-            onValueChange = { alphaLocal.value = it },
-            // 拖动过程只更新本地状态，松手才写盘——避免高频 DataStore 写导致的卡顿（2026-11 流畅性优化）
-            onValueChangeFinished = { scope.launch { appSettings.setBackgroundAlpha(alphaLocal.value) } },
-            valueRange = 0f..1f,
-        )
+            Spacer(modifier = Modifier.height(8.dp))
+            val alphaLocal = remember { mutableStateOf(bgAlpha) }
+            LaunchedEffect(bgAlpha) { alphaLocal.value = bgAlpha }
+            Text(
+                text = stringResource(R.string.settings_background_alpha, (alphaLocal.value * 100).toInt()),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Slider(
+                value = alphaLocal.value,
+                onValueChange = { alphaLocal.value = it },
+                onValueChangeFinished = { scope.launch { appSettings.setBackgroundAlpha(alphaLocal.value) } },
+                valueRange = 0f..1f,
+            )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_liquid_glass),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = stringResource(R.string.settings_liquid_glass_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
+            SwitchRow(
+                title = stringResource(R.string.settings_liquid_glass),
+                desc = stringResource(R.string.settings_liquid_glass_desc),
                 checked = glassEnabled,
                 onCheckedChange = { scope.launch { appSettings.setLiquidGlassEnabled(it) } },
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_crash_capture),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = stringResource(R.string.settings_crash_capture_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
+        // ---- 启动器 ----
+        CollapsibleSection(title = stringResource(R.string.settings_section_launcher), initiallyExpanded = true) {
+            SwitchRow(
+                title = stringResource(R.string.settings_crash_capture),
+                desc = stringResource(R.string.settings_crash_capture_desc),
                 checked = crashCapture,
                 onCheckedChange = { scope.launch { appSettings.setCrashCaptureEnabled(it) } },
             )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_wifi_only),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = stringResource(R.string.settings_wifi_only_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
+            Spacer(modifier = Modifier.height(12.dp))
+            SwitchRow(
+                title = stringResource(R.string.settings_wifi_only),
+                desc = stringResource(R.string.settings_wifi_only_desc),
                 checked = wifiOnly,
                 onCheckedChange = { scope.launch { appSettings.setDownloadWifiOnly(it) } },
             )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_developer_mode),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = stringResource(R.string.settings_developer_mode_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
+            Spacer(modifier = Modifier.height(12.dp))
+            SwitchRow(
+                title = stringResource(R.string.settings_developer_mode),
+                desc = stringResource(R.string.settings_developer_mode_desc),
                 checked = developerMode,
                 onCheckedChange = { scope.launch { appSettings.setDeveloperMode(it) } },
             )
         }
 
-        // ---- 下载与镜像（2026-11-02 新增：切换后下载立即使用所选镜像） ----
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(R.string.settings_section_mirror),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.settings_origin_mirror),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("OFFICIAL" to "官方源（慢）", "BMCLAPI" to "BMCLAPI 镜像（推荐）").forEach { (id, label) ->
-                FilterChip(
-                    selected = gameSettingsState.launcher.mirrorId == id,
-                    onClick = { gameSettingsViewModel.setOriginMirror(id) },
-                    label = { Text(label) },
-                )
+        // ---- 下载 ----
+        CollapsibleSection(title = stringResource(R.string.settings_cat_download), initiallyExpanded = true) {
+            Text(stringResource(R.string.settings_origin_mirror), style = MaterialTheme.typography.bodyLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("OFFICIAL" to "官方源", "BMCLAPI" to "BMCLAPI（推荐）").forEach { (id, label) ->
+                    FilterChip(
+                        selected = gameSettingsState.launcher.mirrorId == id,
+                        onClick = { gameSettingsViewModel.setOriginMirror(id) },
+                        label = { Text(label) },
+                    )
+                }
             }
-        }
-        Text(
-            text = stringResource(R.string.settings_origin_mirror_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.settings_community_mirror),
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("OFFICIAL" to "Modrinth 官方", "MCIMIRROR" to "MCMirror 镜像").forEach { (id, label) ->
-                FilterChip(
-                    selected = gameSettingsState.launcher.communityMirrorId == id,
-                    onClick = { gameSettingsViewModel.setCommunityMirror(id) },
-                    label = { Text(label) },
-                )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(stringResource(R.string.settings_community_mirror), style = MaterialTheme.typography.bodyLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("OFFICIAL" to "Modrinth 官方", "MCIMIRROR" to "MCMirror").forEach { (id, label) ->
+                    FilterChip(
+                        selected = gameSettingsState.launcher.communityMirrorId == id,
+                        onClick = { gameSettingsViewModel.setCommunityMirror(id) },
+                        label = { Text(label) },
+                    )
+                }
             }
-        }
-        Text(
-            text = stringResource(R.string.settings_community_mirror_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(R.string.settings_section_account),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        val account: Account? = activeAccount
-        if (account == null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            val threadsLocal = remember { mutableStateOf(downloadThreads) }
+            LaunchedEffect(downloadThreads) { threadsLocal.value = downloadThreads }
             Text(
-                text = stringResource(R.string.account_none),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.settings_download_threads, threadsLocal.value),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Slider(
+                value = threadsLocal.value.toFloat(),
+                onValueChange = { threadsLocal.value = it.toInt() },
+                onValueChangeFinished = { scope.launch { appSettings.setDownloadThreads(threadsLocal.value) } },
+                valueRange = AppSettings.MIN_DOWNLOAD_THREADS.toFloat()..AppSettings.MAX_DOWNLOAD_THREADS.toFloat(),
+                steps = AppSettings.MAX_DOWNLOAD_THREADS - AppSettings.MIN_DOWNLOAD_THREADS - 1,
+            )
+            Text(
+                text = stringResource(R.string.settings_download_threads_desc),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        }
+
+        // ---- 网络 ----
+        CollapsibleSection(title = stringResource(R.string.settings_cat_network), initiallyExpanded = false) {
+            SwitchRow(
+                title = stringResource(R.string.settings_official_site),
+                desc = stringResource(R.string.settings_official_site_desc),
+                checked = officialEnabled,
+                onCheckedChange = { scope.launch { appSettings.setOfficialSiteEnabled(it) } },
+            )
+        }
+
+        // ---- 账号 ----
+        CollapsibleSection(title = stringResource(R.string.settings_section_account), initiallyExpanded = false) {
+            val account: Account? = activeAccount
+            if (account == null) {
                 Text(
-                    text = account.username,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = stringResource(
-                        if (account.type == AccountType.LOCAL_OFFLINE) R.string.account_type_offline else R.string.account_type_microsoft
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
+                    text = stringResource(R.string.account_none),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = account.username, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(
+                        text = stringResource(
+                            if (account.type == AccountType.LOCAL_OFFLINE) R.string.account_type_offline else R.string.account_type_microsoft
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (account.type == AccountType.LOCAL_OFFLINE) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.account_offline_limitations),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
-            if (account.type == AccountType.LOCAL_OFFLINE) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.account_offline_limitations),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { showCreateDialog = true }) {
+                    Text(stringResource(R.string.account_create_offline))
+                }
+                Button(onClick = {}, enabled = false) {
+                    Text(stringResource(R.string.account_ms_login))
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { showCreateDialog = true }) {
-                Text(text = stringResource(R.string.account_create_offline))
-            }
-            Button(onClick = {}, enabled = false) {
-                Text(text = stringResource(R.string.account_ms_login))
-            }
+        // ---- 游戏 ----
+        CollapsibleSection(title = stringResource(R.string.settings_section_game), initiallyExpanded = false) {
+            GameSettingsSection(gameSettingsViewModel)
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.account_ms_reserved),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(R.string.settings_section_game),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        GameSettingsSection(gameSettingsViewModel)
     }
 
     if (showCreateDialog) {
@@ -395,6 +328,56 @@ fun SettingsScreen(
                 }
             },
         )
+    }
+}
+
+/** 可折叠分类标题。 */
+@Composable
+private fun CollapsibleSection(
+    title: String,
+    initiallyExpanded: Boolean,
+    content: @Composable () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = if (expanded) "▲" else "▼",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (expanded) {
+            content()
+        }
+    }
+}
+
+/** 开关行（标题 + 描述 + Switch）。 */
+@Composable
+private fun SwitchRow(
+    title: String,
+    desc: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

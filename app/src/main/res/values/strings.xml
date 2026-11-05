@@ -16,6 +16,13 @@
     <string name="legal_contact">联系方式：%1$s</string>
 
     <string name="settings_ui_custom">界面自定义</string>
+    <string name="settings_cat_ui">界面</string>
+    <string name="settings_cat_download">下载</string>
+    <string name="settings_cat_network">网络</string>
+    <string name="settings_download_threads">下载线程数（%1$d）</string>
+    <string name="settings_download_threads_desc">控制版本/模组/加载器下载的并发线程数；数值越大越可能吃满带宽，但弱网下过高会触发重试反而变慢。</string>
+    <string name="settings_official_site">连接官网</string>
+    <string name="settings_official_site_desc">开启后主页标签页加载官网网页；默认关闭，关闭时启动不加载网页（更省流量与内存）。</string>
     <string name="settings_background_image">背景图像</string>
     <string name="settings_background_default">当前使用内置默认背景</string>
     <string name="settings_background_custom">已使用自定义背景</string>

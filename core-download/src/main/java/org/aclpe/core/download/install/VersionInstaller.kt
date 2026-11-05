@@ -56,6 +56,8 @@ class VersionInstaller(
     private val platformContext: PlatformContext = PlatformContext.fromOsSpec(),
     /** 下载镜像来源（设置项）：每次安装开始时取一次。 */
     private val originMirror: suspend () -> MirrorId = { MirrorId.OFFICIAL },
+    /** 下载线程数（设置项滑块，1~32）：每次进入库/资源阶段时读取当前值。 */
+    private val downloadThreads: () -> Int = { DEFAULT_THREADS },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
@@ -160,7 +162,7 @@ class VersionInstaller(
                     "version install: assets %d files in %dms (concurrency=%d)",
                     index.objects.size,
                     (System.nanoTime() / 1_000_000L) - assetsStartedAt,
-                    ASSET_CONCURRENCY,
+                    downloadThreads(),
                 )
 
                 // 7. 完成
@@ -232,7 +234,7 @@ class VersionInstaller(
         onFilesDone: (Int) -> Unit,
     ) = coroutineScope {
         var done: Int = 0
-        val semaphore = Semaphore(LIBRARY_CONCURRENCY)
+        val semaphore = Semaphore(downloadThreads().coerceIn(1, 64))
         entries.map { (path: String, url: String) ->
             launch {
                 semaphore.withPermit {
@@ -263,7 +265,7 @@ class VersionInstaller(
         var done: Int = 0
         var bytes: Long = 0L
         var lastReport: Long = 0L
-        val semaphore = Semaphore(ASSET_CONCURRENCY)
+        val semaphore = Semaphore(downloadThreads().coerceIn(1, 64))
         val lock = Any()
         index.objects.entries.map { (name: String, obj: org.aclpe.core.download.resolve.AssetsObject) ->
             launch {
@@ -390,14 +392,10 @@ class VersionInstaller(
         const val UA: String = "ACL-PE/0.0.6 (github.com/yemao-maomao/All-Craft-Launcher-PE)"
 
         /**
-         * 并发度（2026-11-03 基线实测后定值，配合 app 侧 OkHttp 的 maxRequestsPerHost=32）：
-         * - 库文件数百 KB~数 MB：8 并发；
-         * - assets 多为几 KB~数十 KB 且**延迟主导**（单文件实测 0.87-3.9s）：
-         *   实测并发 8/24 均为 3.1-3.4x，而 16 并发曾因弱网重试放大反而变慢 →
-         *   取中间值 12，兼顾吞吐与弱网稳定性（重试退避会放大高并发失败）。
+         * 下载并发默认值（2026-11 起由设置页「下载线程数」滑块动态覆盖，1~32）。
+         * 默认 8：库/资源阶段统一用 [downloadThreads] 提供的当前值。
          */
-        const val LIBRARY_CONCURRENCY: Int = 8
-        const val ASSET_CONCURRENCY: Int = 12
+        const val DEFAULT_THREADS: Int = 8
 
         /** client.jar（约 20MB+）分片数：单文件并行提速。 */
         const val CLIENT_CHUNKS: Int = 8

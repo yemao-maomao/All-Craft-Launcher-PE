@@ -22,51 +22,55 @@ import androidx.compose.ui.unit.dp
 
 /**
  * 液态玻璃背景层（PCL 风格，2026-11 重构）：
- * - 底层：用户自定义背景图（相册 URI）或内置深色渐变；
- * - 中层：毛玻璃模糊（API 31+ 真 blur；低版本自动降级为纯半透明，无真模糊）；
- * - 上层：[alpha] 控制背景明暗遮罩（1.0 = 背景完全不透明，0 = 完全透明）；
+ * - 底层：用户自定义背景图（相册 URI）或内置渐变（随深浅色主题切换明暗）；
+ * - [imageAlpha] 是**背景图片本身的不透明度**（0=完全透明，1=完全不透明）；
+ * - 中层：毛玻璃模糊（API 31+ 真 blur；低版本自动降级为半透明）；
+ * - 上层：固定明暗遮罩（保证前景文字可读，不再由用户滑块控制）；
  * - 内容绘制于最上层（[content]）。
  */
 @Composable
 fun GlassBackground(
     imageUri: String?,
-    alpha: Float,
+    imageAlpha: Float,
     liquidGlassEnabled: Boolean,
+    darkTheme: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val context: Context = LocalContext.current
     val bitmap: ImageBitmap? = remember(imageUri) { loadBackground(context, imageUri) }
 
+    val gradient: List<Color> = if (darkTheme) {
+        listOf(Color(0xFF1A1D24), Color(0xFF0D1117))
+    } else {
+        listOf(Color(0xFFFFFFFF), Color(0xFFE4E8EE))
+    }
+    val overlay: Color = if (darkTheme) Color(0xFF0D1117) else Color(0xFFF7F9FB)
+
     Box(modifier = modifier.fillMaxSize()) {
-        // 背景层
+        // 背景层（图片或渐变；imageAlpha 控制图片不透明度）
         if (bitmap != null) {
             Image(
                 bitmap = bitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                alpha = imageAlpha.coerceIn(0f, 1f),
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(
-                        if (liquidGlassEnabled) Modifier.blur(BLUR_RADIUS) else Modifier
-                    ),
+                    .then(if (liquidGlassEnabled) Modifier.blur(BLUR_RADIUS) else Modifier),
             )
         } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0xFF1A1D24), Color(0xFF0D1117)),
-                        )
-                    ),
+                    .background(Brush.verticalGradient(gradient)),
             )
         }
-        // 明暗遮罩（alpha 越大背景越清晰/越不透明）
+        // 固定明暗遮罩（保证文字可读；不再由用户调节）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0D1117).copy(alpha = (1f - alpha).coerceIn(0f, 1f))),
+                .background(overlay.copy(alpha = OVERLAY_ALPHA)),
         )
         content()
     }
@@ -83,3 +87,6 @@ private fun loadBackground(context: Context, uri: String?): ImageBitmap? {
 }
 
 private val BLUR_RADIUS = 24.dp
+
+/** 固定遮罩不透明度：保证前景文字在任意背景图上都可读。 */
+private const val OVERLAY_ALPHA = 0.30f

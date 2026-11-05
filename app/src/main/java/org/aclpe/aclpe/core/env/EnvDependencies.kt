@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.aclpe.aclpe.core.AppSettings
 import org.aclpe.core.account.AccountRepository
@@ -131,16 +132,32 @@ class EnvDependencies(context: Context, appScope: CoroutineScope, appSettings: A
     val modrinthClient: org.aclpe.core.mods.modrinth.ModrinthClient =
         org.aclpe.core.mods.modrinth.ModrinthClient(httpClient, baseUrlProvider = communityMirrorProvider)
 
-    /** 版本安装流水线：manifest → json → jar → 库 → natives → assets → installed（镜像随设置）。 */
+    /** 下载线程数（设置页滑块，1~32）：内存缓存，设置变化时后台同步，下载阶段实时读取。 */
+    @Volatile
+    private var currentDownloadThreads: Int = AppSettings.DEFAULT_DOWNLOAD_THREADS
+
+    init {
+        appScope.launch {
+            appSettings.downloadThreads.collect { currentDownloadThreads = it }
+        }
+    }
+
+    private val downloadThreadsProvider: () -> Int = { currentDownloadThreads }
+
+    /** 版本安装流水线：manifest → json → jar → 库 → natives → assets → installed（镜像+线程数随设置）。 */
     val versionInstaller: org.aclpe.core.download.install.VersionInstaller =
         org.aclpe.core.download.install.VersionInstaller(
-            httpClient, manager, appScope, originMirror = originMirrorProvider,
+            httpClient, manager, appScope,
+            originMirror = originMirrorProvider,
+            downloadThreads = downloadThreadsProvider,
         )
 
-    /** 模组加载器安装（Fabric/Quilt，为已有版本添加；镜像随设置）。 */
+    /** 模组加载器安装（Fabric/Quilt，为已有版本添加；镜像+线程数随设置）。 */
     val modLoaderInstaller: org.aclpe.core.download.loader.ModLoaderInstaller =
         org.aclpe.core.download.loader.ModLoaderInstaller(
-            httpClient, manager, appScope, originMirror = originMirrorProvider,
+            httpClient, manager, appScope,
+            originMirror = originMirrorProvider,
+            downloadThreads = downloadThreadsProvider,
         )
 
     /** 版本安装目录（与启动链路 runtimes/<profileId> 一致）。 */
